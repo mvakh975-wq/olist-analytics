@@ -24,6 +24,7 @@ dev = [
     "ipykernel>=6",
     "matplotlib>=3.9",
     "playwright>=1.47",
+    "jupyterlab>=4.6.4",
 ]
 
 [tool.ruff]
