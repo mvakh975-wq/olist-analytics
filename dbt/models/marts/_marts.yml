@@ -53,7 +53,7 @@ models:
   - name: mart_cohort_retention
     description: >
       Share of each first-purchase cohort (customer_unique_id) that placed a valid order N months later.
-      Only offsets that are already observable are present.
+      Only offsets that fall within the analysis period are present.
     data_tests:
       - unique_combination:
           arguments: {columns: [cohort_month, months_since_first]}

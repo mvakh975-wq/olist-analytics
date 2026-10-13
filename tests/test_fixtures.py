@@ -65,6 +65,15 @@ def test_fixture_covers_edge_cases():
     )
 
 
+def test_fixture_has_orders_outside_analysis_period():
+    assert (
+        q(
+            "select count(*) from 'FIX/olist_orders_dataset.csv' where order_purchase_timestamp >= '2018-09-01'"
+        )
+        >= 1
+    )
+
+
 def test_referential_integrity():
     assert (
         q("""select count(*) from 'FIX/olist_order_items_dataset.csv' i

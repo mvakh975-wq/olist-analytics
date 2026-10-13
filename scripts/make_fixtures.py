@@ -47,6 +47,9 @@ MUST_HAVE = {
                     order by 1 limit 1""",
     "two_sellers": """select order_id from items group by 1 having count(distinct seller_id) > 1
                       order by 1 limit 1""",
+    "after_period": """select order_id from orders
+                       where order_purchase_timestamp::timestamp >= '2018-09-01'
+                       order by 1 limit 1""",
     "no_items": """select order_id from orders o where order_status = 'unavailable'
                    and not exists (select 1 from items i where i.order_id = o.order_id)
                    order by 1 limit 1""",

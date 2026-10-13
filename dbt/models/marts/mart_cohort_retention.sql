@@ -18,11 +18,12 @@ cohorts as (
     group by cohort_month
 ),
 
+-- the last month with a full order volume; later months hold almost no orders
 last_month as (
-    select max(purchase_month) as max_month from {{ ref('fct_orders') }}
+    select date_trunc('month', '{{ var("analysis_end") }}'::date)::date as max_month
 ),
 
--- every cohort x month offset that can already be observed
+-- every cohort x month offset that can be observed within the analysis period
 grid as (
     select
         c.cohort_month,

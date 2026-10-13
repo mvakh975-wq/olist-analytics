@@ -48,11 +48,12 @@ def test_retention_bounds(built_db):
     ) == [(0,)]
 
 
-def test_no_unobservable_months(built_db):
+def test_no_offsets_beyond_analysis_period(built_db):
+    # months after the analysis period hold almost no orders; counting them as observed
+    # would show near-zero retention for the latest cohorts
     rows = query(
         built_db,
         """select count(*) from mart_cohort_retention
-           where cohort_month + to_months(months_since_first)
-                 > (select max(purchase_month) from fct_orders)""",
+           where cohort_month + to_months(months_since_first) > date '2018-08-01'""",
     )
     assert rows == [(0,)]
