@@ -24,7 +24,9 @@ do happen are placed on the same day as the first, so genuine return visits are 
 **Recommendation:** launch and A/B-test a second-purchase programme (a time-limited offer in the first
 30 days after delivery), aimed first at the "Promising high-value" segment: 15% of customers who
 bought recently and spent in the top 40%. Together with "At risk high-value", these one-time buyers are
-30% of customers and 56% of revenue.
+38% of customers and 68% of revenue. "At risk high-value" customers also had the highest
+late-delivery rate of any segment (8.1%), so the win-back should start by checking how their order
+went.
 → [`02_retention`](../notebooks/02_retention.ipynb), [`03_rfm`](../notebooks/03_rfm.ipynb)
 
 ## 3. Late delivery goes with far worse reviews
@@ -42,11 +44,12 @@ cheaper than a 1-star review.
 
 ## 4. Delays concentrate in time and place
 
-- **Time:** 12.4% of orders were late in November 2017 (Black Friday) and 14.1% / 19.0% in February /
+- **Time:** the late-delivery rate more than doubled, from 3.5% in January–August 2017 to 7.7% in the same
+  months of 2018. It peaked at 12.4% in November 2017 (Black Friday) and 14.1% / 19.0% in February /
   March 2018, against about 3% in calm months of 2017.
 - **Place:** 4.5% in São Paulo, the largest market, against 12.1% in Rio de Janeiro and 17.5% in
   Maranhão (states with 500+ delivered orders range from 4.1% in Paraná to 17.5%).
-- **Sellers:** the worst 10% of sellers with 50+ orders (42 sellers) are late on 15.4% of their orders,
+- **Sellers:** the worst 10% of sellers with 50+ delivered orders (42 sellers) are late on 15.3% of their orders,
   against 6.2% for the rest. They are a clear target for improvement, though they account for only
   about a tenth of all late deliveries; most delays are spread across the network.
 

@@ -19,9 +19,9 @@
 Analysis period January 2017 – August 2018, valid orders only. Full write-up with recommendations: [`docs/findings.md`](docs/findings.md).
 
 1. **Growth came from new customers, and it stalled in 2018.** GMV in Jan–Aug 2018 was 8.59 M BRL, 2.4× the same months of 2017, while the average order value stayed flat at ~160 BRL. No month in 2018 beat the Black Friday month of November 2017.
-2. **Almost nobody buys twice.** 97% of customers placed exactly one order; only 0.48% of a cohort orders again the following month. Two high-value one-time-buyer segments are 30% of customers and 56% of revenue, the natural target for a second-purchase programme.
+2. **Almost nobody buys twice.** 97% of customers placed exactly one order; only 0.48% of a cohort orders again the following month. Two high-value one-time-buyer segments are 38% of customers and 68% of revenue, the natural target for a second-purchase programme.
 3. **Late delivery goes with far worse reviews.** On-time orders average 4.29 stars, late ones 2.27 (−2.02, 95% CI −2.06 to −1.98, Mann–Whitney p < 0.001). 68% of orders delivered 4–7 days late get a 1–2 star review, against 9% on time. The gap holds inside each of the 21 states with enough late orders and inside the five largest categories.
-4. **Delays concentrate in time and place.** Late rates peaked at 12.4% in November 2017 and 19.0% in March 2018 against about 3% in calm months; São Paulo, the largest market, sees 4.5% late against 12.1% in Rio de Janeiro and 17.5% in Maranhão. The worst 10% of active sellers are late on 15.4% of their orders against 6.2% for the rest.
+4. **Delays concentrate in time and place.** The late-delivery rate more than doubled year over year (3.5% → 7.7% for January–August), peaking at 12.4% in November 2017 and 19.0% in March 2018 against about 3% in calm months; São Paulo, the largest market, sees 4.5% late against 12.1% in Rio de Janeiro and 17.5% in Maranhão. The worst 10% of active sellers are late on 15.3% of their orders against 6.2% for the rest, yet they cause only 11% of all late deliveries.
 
 ## Business questions
 
@@ -38,14 +38,14 @@ Analysis period January 2017 – August 2018, valid orders only. Full write-up w
 ```
 Kaggle (9 CSV) ─► scripts/download.py ─► data/raw/                      (not in git)
    ─► dbt + DuckDB: staging ─► intermediate ─► marts, 53 data tests    (olist.duckdb, not in git)
-   ─► scripts/export_marts.py ─► data/marts/*.parquet                  (in git, ~19 MB)
+   ─► scripts/export_marts.py ─► data/marts/*.parquet + statistics     (in git, ~19 MB)
    ─► notebooks/: statistics and charts
    ─► site/: Observable Framework; SQL runs in the browser on small aggregates ─► GitHub Pages
 ```
 
 - **SQL models** ([`dbt/models`](dbt/models)): typed staging views, one enriched row per order, and marts per question: `fct_orders`, `dim_customers`, `mart_monthly_kpis`, `mart_cohort_retention`, `mart_rfm`, `mart_delivery_performance` and others.
 - **Data quality** ([`docs/data_quality.md`](docs/data_quality.md)): every table profiled for nulls, duplicates and types before modelling, with a decision for each issue. dbt tests guard keys, relationships, accepted values and business rules (for example, no delay is ever computed for an order that was not delivered).
-- **Tests** (pytest, 58): the dbt project is built on a sample of real rows chosen to contain every edge case found in profiling, and the marts are reconciled against totals computed straight from the raw files. CI runs lint (ruff, sqlfluff), dbt build, pytest and a dashboard build on every push.
+- **Tests** (pytest, 66): the dbt project is built on a sample of real rows chosen to contain every edge case found in profiling, and the marts are reconciled against totals computed straight from the raw files. CI runs lint (ruff, sqlfluff), dbt build, pytest and a dashboard build on every push.
 - **Dashboard checks**: a Playwright script opens every page at desktop and phone widths in light and dark mode and fails on errors or horizontal scroll.
 
 ### Three things the data tried to hide

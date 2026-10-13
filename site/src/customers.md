@@ -58,7 +58,7 @@ const actions = new Map([
   ["Loyal", ["2+ orders, not recently", "Personalised win-back with category recommendations"]],
   ["Promising high-value", ["1 order, recent, top-40% spend", "Second-purchase offer within 30 days of delivery"]],
   ["Recent", ["1 order, recent, lower spend", "Onboarding emails and low-cost add-ons"]],
-  ["At risk high-value", ["1 order, long ago, top-40% spend", "Win-back campaign; check whether the delivery went wrong"]],
+  ["At risk high-value", ["1 order, not recent (bottom 60% by recency), top-40% spend", "Win-back campaign; check whether the delivery went wrong"]],
   ["Hibernating", ["Everyone else", "Low-cost reactivation only"]]
 ]);
 const rows = [...seg].map((d) => ({

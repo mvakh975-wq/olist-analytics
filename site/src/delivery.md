@@ -157,6 +157,7 @@ const monthlyRows = [...monthly_rows].map((d) => ({month: asDate(d.month), late_
   ${resize((width) => Plot.plot({
     width,
     height: 280,
+    marginRight: 30,
     x: {type: "utc", label: "Purchase month", ticks: width < 600 ? "6 months" : "3 months", tickFormat: "%b %Y"},
     y: {grid: true, label: "Late deliveries, % of delivered orders", percent: true},
     marks: [
@@ -175,7 +176,7 @@ select * from states
 ```js
 const stateRows = [...state_rows]
   .filter((d) => d.orders >= 500)
-  .map((d) => ({state: d.customer_state, late_rate: d.late_orders / d.orders, orders: d.orders, avg_days: d.delivery_days_sum / d.orders}))
+  .map((d) => ({state: d.customer_state, late_rate: d.late_orders / d.orders, orders: d.orders, avg_days: d.delivery_days_sum / d.orders, avg_days_late: d.late_delay_days_sum / d.late_orders}))
   .sort((a, b) => b.late_rate - a.late_rate);
 const overall = d3.sum(state_rows, (d) => d.late_orders) / d3.sum(state_rows, (d) => d.orders);
 ```
@@ -190,7 +191,7 @@ const overall = d3.sum(state_rows, (d) => d.late_orders) / d3.sum(state_rows, (d
     x: {grid: true, label: "Late deliveries, % of delivered orders", percent: true},
     y: {domain: stateRows.map((d) => d.state), label: null},
     marks: [
-      Plot.barX(stateRows, {y: "state", x: "late_rate", fill: (d) => (d.late_rate > overall ? "var(--signal)" : "var(--context)"), insetTop: 2, insetBottom: 2, tip: {format: {x: (d) => pct(d), fill: false, orders: (d) => integer(d), avg_days: (d) => d.toFixed(1)}}, channels: {orders: {value: "orders", label: "Orders"}, avg_days: {value: "avg_days", label: "Avg delivery, days"}}}),
+      Plot.barX(stateRows, {y: "state", x: "late_rate", fill: (d) => (d.late_rate > overall ? "var(--signal)" : "var(--context)"), insetTop: 2, insetBottom: 2, tip: {format: {x: (d) => pct(d), fill: false, orders: (d) => integer(d), avg_days: (d) => d.toFixed(1), avg_days_late: (d) => d.toFixed(1)}}, channels: {orders: {value: "orders", label: "Orders"}, avg_days: {value: "avg_days", label: "Avg delivery, days"}, avg_days_late: {value: "avg_days_late", label: "Avg delay when late, days"}}}),
       Plot.ruleX([overall], {stroke: "currentColor", strokeDasharray: "4,3"}),
       Plot.ruleX([0])
     ]
@@ -200,11 +201,13 @@ const overall = d3.sum(state_rows, (d) => d.late_orders) / d3.sum(state_rows, (d
 ## Sellers
 
 ```sql id=seller_split
-with ranked as (select *, ntile(10) over (order by late_rate desc) as decile from sellers)
+-- sellers with 50+ delivered orders in the analysis period, worst late rate first
+with ranked as (select *, ntile(10) over (order by late_rate desc, seller) as decile from sellers)
 select decile = 1 as worst_10pct,
        count(*) as sellers,
-       sum(n_orders) as orders,
-       sum(late_rate * n_orders) / sum(n_orders) as late_rate
+       sum(delivered_orders) as orders,
+       sum(late_orders) / sum(delivered_orders) as late_rate,
+       sum(late_orders) / (select sum(late_orders) from states) as share_of_all_late
 from ranked
 group by 1
 order by 1 desc
@@ -215,19 +218,19 @@ const worst = seller_split.get(0);
 const rest = seller_split.get(1);
 ```
 
-The worst 10% of sellers with 50+ orders (${worst.sellers} sellers, ${integer(worst.orders)} orders) are late on **${pct(worst.late_rate)}** of their orders, against ${pct(rest.late_rate)} for the other ${rest.sellers}. Sellers are identified by the first 8 characters of their anonymised id.
+The worst 10% of sellers with 50+ delivered orders (${worst.sellers} sellers, ${integer(worst.orders)} orders) are late on **${pct(worst.late_rate)}** of their orders, against ${pct(rest.late_rate)} for the other ${rest.sellers}. Still, they cause only ${pct(worst.share_of_all_late, 0)} of all late deliveries: most delays are spread across the network. Sellers are identified by the first 8 characters of their anonymised id.
 
 ```sql id=worst_sellers
-select seller, seller_state, n_orders, late_rate, avg_review_score
+select seller, seller_state, delivered_orders, late_rate, avg_days_late, avg_review_score
 from sellers
-order by late_rate desc
+order by late_rate desc, seller
 limit 15
 ```
 
 ```js
 display(Inputs.table(worst_sellers, {
   layout: "auto",
-  header: {seller: "Seller", seller_state: "State", n_orders: "Orders", late_rate: "Late", avg_review_score: "Mean score"},
-  format: {n_orders: integer, late_rate: (d) => pct(d), avg_review_score: stars}
+  header: {seller: "Seller", seller_state: "State", delivered_orders: "Delivered orders", late_rate: "Late", avg_days_late: "Avg delay when late, days", avg_review_score: "Mean score"},
+  format: {delivered_orders: integer, late_rate: (d) => pct(d), avg_days_late: (d) => (d == null ? "–" : d.toFixed(1)), avg_review_score: stars}
 }));
 ```

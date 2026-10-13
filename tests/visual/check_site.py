@@ -1,6 +1,7 @@
 """Open every dashboard page at desktop and phone widths in light and dark mode.
 
-Fails on console errors, page errors, error messages rendered by the page, or horizontal scroll,
+Fails on console errors, page errors, error messages rendered by the page, horizontal scroll,
+a missing lang attribute or missing link-preview tags,
 and saves a full-page screenshot of each combination.
 
 Usage: python tests/visual/check_site.py BASE_URL OUT_DIR
@@ -34,6 +35,11 @@ def main(base: str, out: Path) -> int:
                     # Framework renders cell errors inline with this class
                     for text in page.locator(".observablehq--error").all_inner_texts():
                         problems.append(f"{vp}/{scheme}/{name}: {text.strip()[:200]}")
+                    if page.evaluate("document.documentElement.lang") != "en":
+                        problems.append(f"{vp}/{scheme}/{name}: <html> has no lang=en")
+                    for tag in ("og:title", "og:description", "og:image"):
+                        if not page.locator(f'meta[property="{tag}"]').count():
+                            problems.append(f"{vp}/{scheme}/{name}: missing {tag}")
                     if page.evaluate(
                         "document.documentElement.scrollWidth > window.innerWidth + 1"
                     ):

@@ -11,14 +11,30 @@ import {integer, pct, millionsBRL, brl, asDate} from "./components/format.js";
 
 # Is the business growing?
 
-<p class="lede">Monthly GMV (items + freight, BRL) over the analysis period, January 2017 – August 2018. Filter by customer state and product category.</p>
+<p class="lede">Monthly GMV (items + freight, BRL) over the analysis period, January 2017 – August 2018. Filter by period, customer state and product category.</p>
 
 ```sql id=state_options
 select distinct customer_state from gmv where customer_state is not null order by 1
 ```
 
+```sql id=month_options
+select strftime(month, '%Y-%m-%d') as month from kpis where is_analysis_period order by 1
+```
+
 ```sql id=category_options
 select category from gmv where is_analysis_period group by 1 order by sum(gmv) desc
+```
+
+```js
+const months = [...month_options].map((d) => d.month);
+const monthLabel = (m) => d3.utcFormat("%b %Y")(new Date(m));
+const from = view(Inputs.select(months, {label: "From", format: monthLabel, value: months[0]}));
+const to = view(Inputs.select(months, {label: "To", format: monthLabel, value: months.at(-1)}));
+```
+
+```js
+// a reversed range is read as the same range the right way round
+const [start, end] = from <= to ? [from, to] : [to, from];
 ```
 
 ```js
@@ -28,7 +44,10 @@ const category = view(Inputs.select(["All categories", ...[...category_options].
 
 ```sql id=monthly
 -- every month of the period, so months without sales show as 0 instead of being skipped
-with months as (select month from kpis where is_analysis_period)
+with months as (
+  select month from kpis
+  where is_analysis_period and month between cast(${start} as date) and cast(${end} as date)
+)
 select m.month, coalesce(sum(g.gmv), 0) as gmv
 from months as m
 left join gmv as g
@@ -60,6 +79,7 @@ const growth = g.gmv_2017 > 0 ? g.gmv_2018 / g.gmv_2017 - 1 : null;
     width,
     height: 300,
     marginLeft: 60,
+    marginRight: 30,
     x: {type: "utc", label: "Purchase month", ticks: width < 600 ? "6 months" : "3 months", tickFormat: "%b %Y"},
     y: {grid: true, label: "GMV, thousand BRL", tickFormat: (d) => (d / 1e3).toLocaleString("en-US")},
     marks: [
@@ -103,10 +123,12 @@ limit 10
 
 ## Order value and freight
 
-<p class="chart-note">These two charts cover all states and categories.</p>
+<p class="chart-note">These two charts follow the period filter and cover all states and categories.</p>
 
 ```sql id=kpiRows
-select month, avg_order_value, freight_share from kpis where is_analysis_period order by month
+select month, avg_order_value, freight_share from kpis
+where is_analysis_period and month between cast(${start} as date) and cast(${end} as date)
+order by month
 ```
 
 <div class="grid grid-cols-2">
@@ -115,6 +137,7 @@ select month, avg_order_value, freight_share from kpis where is_analysis_period 
     ${resize((width) => Plot.plot({
       width,
       height: 240,
+      marginRight: 24,
       x: {type: "utc", label: "Purchase month", tickFormat: "%b %y"},
       y: {grid: true, label: "Average order value, BRL", domain: [0, 200]},
       marks: [
@@ -128,6 +151,7 @@ select month, avg_order_value, freight_share from kpis where is_analysis_period 
     ${resize((width) => Plot.plot({
       width,
       height: 240,
+      marginRight: 24,
       x: {type: "utc", label: "Purchase month", tickFormat: "%b %y"},
       y: {grid: true, label: "Freight share of GMV, %", percent: true, domain: [0, 20]},
       marks: [
