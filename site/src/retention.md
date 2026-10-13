@@ -1,31 +1,29 @@
 ---
 title: Retention
-sql:
-  cohorts: ./data/cohort_retention.parquet
-  orders_per_customer: ./data/orders_per_customer.parquet
 ---
 
 ```js
 import {integer, pct, asDate} from "./components/format.js";
+
+// small aggregates computed when the site is built (scripts/export_marts.py)
+const cohorts = await FileAttachment("data/cohort_retention.json").json();
+const ordersPerCustomer = await FileAttachment("data/orders_per_customer.json").json();
 ```
 
 # Do customers come back?
 
 <p class="lede">Customers are grouped into monthly cohorts by their first purchase. Retention in month N is the share of a cohort that placed another valid order N months later. A customer is a person (<code>customer_unique_id</code>), not the per-order <code>customer_id</code>.</p>
 
-```sql id=distribution
-select
-  case when n_orders >= 3 then '3+ orders' else n_orders::varchar || (case when n_orders = 1 then ' order' else ' orders' end) end as bucket,
-  least(n_orders, 3) as bucket_order,
-  sum(customers) as customers,
-  sum(customers) / (select sum(customers) from orders_per_customer) as share
-from orders_per_customer
-group by 1, 2
-order by 2
+```js
+const allCustomers = d3.sum(ordersPerCustomer, (d) => d.customers);
+const distribution = [1, 2, 3].map((k) => {
+  const customers = d3.sum(ordersPerCustomer.filter((d) => Math.min(d.n_orders, 3) === k), (d) => d.customers);
+  return {bucket: k === 3 ? "3+ orders" : `${k} order${k === 1 ? "" : "s"}`, customers, share: customers / allCustomers};
+});
 ```
 
 ```js
-const once = distribution.get(0);
+const once = distribution[0];
 ```
 
 <div class="grid grid-cols-3">
@@ -36,28 +34,33 @@ const once = distribution.get(0);
   </div>
   <div class="card kpi">
     <h2>Bought twice</h2>
-    <div class="value">${pct(distribution.get(1).share, 2)}</div>
-    <div class="kpi-note">${integer(distribution.get(1).customers)} customers</div>
+    <div class="value">${pct(distribution[1].share, 2)}</div>
+    <div class="kpi-note">${integer(distribution[1].customers)} customers</div>
   </div>
   <div class="card kpi">
     <h2>Bought 3+ times</h2>
-    <div class="value">${pct(distribution.get(2).share, 2)}</div>
-    <div class="kpi-note">${integer(distribution.get(2).customers)} customers</div>
+    <div class="value">${pct(distribution[2].share, 2)}</div>
+    <div class="kpi-note">${integer(distribution[2].customers)} customers</div>
   </div>
 </div>
 
-```sql id=curve
-select months_since_first,
-       sum(active_customers) / sum(cohort_size) as retention,
-       sum(cohort_size) as customers_observed
-from cohorts
-where is_analysis_period and months_since_first between 1 and 12
-group by 1
-order by 1
+```js
+// all cohorts in the analysis period, weighted by size
+const curve = d3
+  .rollups(
+    cohorts.filter((d) => d.is_analysis_period && d.months_since_first >= 1 && d.months_since_first <= 12),
+    (rows) => ({
+      retention: d3.sum(rows, (d) => d.active_customers) / d3.sum(rows, (d) => d.cohort_size),
+      customers_observed: d3.sum(rows, (d) => d.cohort_size)
+    }),
+    (d) => d.months_since_first
+  )
+  .map(([months_since_first, v]) => ({months_since_first, ...v}))
+  .sort((a, b) => a.months_since_first - b.months_since_first);
 ```
 
 <div class="card">
-  <h2>Only ${pct(curve.get(0).retention, 2)} of customers order again in the month after their first purchase</h2>
+  <h2>Only ${pct(curve[0].retention, 2)} of customers order again in the month after their first purchase</h2>
   <h3>All cohorts from Jan 2017, weighted by size; later months include fewer cohorts</h3>
   ${resize((width) => Plot.plot({
     width,
@@ -72,10 +75,10 @@ order by 1
   }))}
 </div>
 
-```sql id=grid
-select strftime(cohort_month, '%b %Y') as cohort, cohort_month, months_since_first, retention, cohort_size, active_customers
-from cohorts
-where is_analysis_period and months_since_first between 1 and 12
+```js
+const grid = cohorts
+  .filter((d) => d.is_analysis_period && d.months_since_first >= 1 && d.months_since_first <= 12)
+  .map((d) => ({...d, cohort: d3.utcFormat("%b %Y")(new Date(d.cohort_month))}));
 ```
 
 ```js

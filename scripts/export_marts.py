@@ -24,7 +24,8 @@ EXPORT_TABLES = (
     "mart_delivery_performance",
 )
 
-# Aggregates for the dashboard, built from the committed parquet marts ({m} = marts directory).
+# Aggregates for the dashboard, built from the committed parquet marts ({m} = marts directory)
+# and written as small JSON files that pages read directly, without an in-browser database.
 # Measures are stored as sums and counts so pages can re-aggregate them after filtering.
 SITE_TABLES = {
     "cohort_retention": "select * from '{m}/mart_cohort_retention.parquet'",
@@ -103,8 +104,8 @@ def export(db: Path, out_dir: Path) -> list[Path]:
 def _browser_types(con: duckdb.DuckDBPyConnection, sql: str) -> str:
     """Wrap a query so BIGINT/HUGEINT become INTEGER and DECIMAL becomes DOUBLE.
 
-    DuckDB-WASM hands BIGINT to JavaScript as BigInt and DECIMAL as an object,
-    which charts cannot plot; every value here fits in those types.
+    Keeps the JSON free of exact-decimal strings and oversized integers, so pages can use
+    every value as a plain JavaScript number; every value here fits in those types.
     """
     columns = []
     for name, column_type, *_ in con.sql(f"describe {sql}").fetchall():
@@ -126,7 +127,7 @@ with kpis as (select * from '{m}/mart_monthly_kpis.parquet'),
      rfm as (select * from '{m}/mart_rfm.parquet'),
      by_state as (select * from '{m}/stats_delay_by_state.parquet'),
      sellers as (select *, ntile(10) over (order by late_rate desc, seller) as decile
-                 from '{site}/sellers_delivery.parquet')
+                 from read_json('{site}/sellers_delivery.json'))
 select
     (select sum(gmv) from kpis where month between '2018-01-01' and '2018-08-01') as gmv_2018,
     (select sum(gmv) from kpis where month between '2017-01-01' and '2017-08-01') as gmv_2017,
@@ -208,9 +209,9 @@ def build_site_data(marts_dir: Path, out_dir: Path, min_seller_orders: int = 50)
     out_dir.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     for name, sql in SITE_TABLES.items():
-        path = out_dir / f"{name}.parquet"
+        path = out_dir / f"{name}.json"
         query = _browser_types(con, sql.format(m=marts_dir, min_seller_orders=min_seller_orders))
-        con.execute(f"copy ({query} order by all) to '{path}' (format parquet, compression zstd)")
+        con.execute(f"copy ({query} order by all) to '{path}' (format json, array true)")
     for name, sql in GROWTH_CSV.items():
         con.execute(
             f"copy ({sql.format(m=marts_dir)} order by all) to '{out_dir / name}.csv' (header)"

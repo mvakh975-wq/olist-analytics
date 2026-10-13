@@ -1,47 +1,59 @@
 ---
 title: Delivery & satisfaction
-sql:
-  buckets: ./data/delivery_by_bucket_state.parquet
-  monthly: ./data/delivery_by_month.parquet
-  states: ./data/delivery_by_state.parquet
-  sellers: ./data/sellers_delivery.parquet
-  effect: ./data/stats_delay_effect.parquet
-  by_state: ./data/stats_delay_by_state.parquet
 ---
 
 ```js
 import {integer, pct, signed, stars, asDate} from "./components/format.js";
+
+// small aggregates computed when the site is built (scripts/export_marts.py)
+const buckets = await FileAttachment("data/delivery_by_bucket_state.json").json();
+const monthly = await FileAttachment("data/delivery_by_month.json").json();
+const states = await FileAttachment("data/delivery_by_state.json").json();
+const sellers = await FileAttachment("data/sellers_delivery.json").json();
+const effect = await FileAttachment("data/stats_delay_effect.json").json();
+const byState = await FileAttachment("data/stats_delay_by_state.json").json();
+// like SQL: a ratio over nothing is "no value", not NaN
+const ratio = (a, b) => (b ? a / b : null);
 ```
 
 # Does delivery affect satisfaction?
 
 <p class="lede">Delivered orders in January 2017 – August 2018. Delay = delivered date minus the delivery date promised at purchase, in days. Orders without a review are left out of the review metrics.</p>
 
-```sql id=state_options
-select customer_state from states order by orders desc
+```js
+const state_options = d3.sort(states, (d) => -d.orders);
 ```
 
 ```js
 const state = view(Inputs.select(["All states", ...[...state_options].map((d) => d.customer_state)], {label: "Customer state"}));
 ```
 
-```sql id=by_bucket
-select delay_bucket, delay_bucket_order,
-       sum(orders) as orders,
-       sum(reviewed) as reviewed,
-       sum(low_score_orders) as low_score_orders,
-       sum(score_sum) / sum(reviewed) as mean_score,
-       sum(low_score_orders) / sum(reviewed) as low_score_share
-from buckets
-where ${state} = 'All states' or customer_state = ${state}
-group by 1, 2
-order by 2
+```js
+const by_bucket = d3
+  .rollups(
+    state === "All states" ? buckets : buckets.filter((d) => d.customer_state === state),
+    (rows) => {
+      const sum = (key) => d3.sum(rows, (d) => d[key]);
+      return {
+        delay_bucket: rows[0].delay_bucket,
+        delay_bucket_order: rows[0].delay_bucket_order,
+        orders: sum("orders"),
+        reviewed: sum("reviewed"),
+        low_score_orders: sum("low_score_orders"),
+        mean_score: ratio(sum("score_sum"), sum("reviewed")),
+        low_score_share: ratio(sum("low_score_orders"), sum("reviewed"))
+      };
+    },
+    (d) => d.delay_bucket_order
+  )
+  .map(([, v]) => v)
+  .sort((a, b) => a.delay_bucket_order - b.delay_bucket_order);
 ```
 
 ```js
 // fixed order so an empty bucket stays visible as a gap instead of disappearing
 const bucketOrder = ["On time or early", "1–3 days late", "4–7 days late", "8–14 days late", "15+ days late"];
-const onTime = by_bucket.get(0);
+const onTime = by_bucket[0];
 const late4 = [...by_bucket].filter((d) => d.delay_bucket_order >= 3);
 const late4Reviewed = d3.sum(late4, (d) => d.reviewed);
 const late4Low = d3.sum(late4, (d) => d.low_score_orders) / late4Reviewed;
@@ -86,8 +98,8 @@ const enoughLate = late4Reviewed >= 30;
 
 Mean scores of reviewed orders, with a 95% bootstrap confidence interval for the difference, a Mann–Whitney U test (review scores are ordinal, so a rank test) and the rank-biserial correlation as effect size (−1 to 1).
 
-```sql id=effect_rows
-select * from effect order by n_late desc
+```js
+const effect_rows = d3.sort(effect, (d) => -d.n_late);
 ```
 
 ```js
@@ -115,8 +127,8 @@ display(Inputs.table([...effect_rows].map((d) => ({
 }));
 ```
 
-```sql id=state_diffs
-select * from by_state order by diff
+```js
+const state_diffs = d3.sort(byState, (d) => d.diff);
 ```
 
 ```js
@@ -144,8 +156,8 @@ const diffs = [...state_diffs];
 
 # Where does logistics fail?
 
-```sql id=monthly_rows
-select * from monthly order by month
+```js
+const monthly_rows = d3.sort(monthly, (d) => d.month);
 ```
 
 ```js
@@ -169,8 +181,8 @@ const monthlyRows = [...monthly_rows].map((d) => ({month: asDate(d.month), late_
   }))}
 </div>
 
-```sql id=state_rows
-select * from states
+```js
+const state_rows = states;
 ```
 
 ```js
@@ -200,31 +212,32 @@ const overall = d3.sum(state_rows, (d) => d.late_orders) / d3.sum(state_rows, (d
 
 ## Sellers
 
-```sql id=seller_split
--- sellers with 50+ delivered orders in the analysis period, worst late rate first
-with ranked as (select *, ntile(10) over (order by late_rate desc, seller) as decile from sellers)
-select decile = 1 as worst_10pct,
-       count(*) as sellers,
-       sum(delivered_orders) as orders,
-       sum(late_orders) / sum(delivered_orders) as late_rate,
-       sum(late_orders) / (select sum(late_orders) from states) as share_of_all_late
-from ranked
-group by 1
-order by 1 desc
+```js
+// sellers with 50+ delivered orders in the analysis period, worst late rate first, split into
+// deciles the way SQL's ntile(10) does (the first n % 10 groups get one extra seller)
+const ranked = d3.sort(sellers, (a, b) => b.late_rate - a.late_rate || d3.ascending(a.seller, b.seller));
+const ntile = (i, n, k) => {
+  const size = Math.floor(n / k), extra = n % k;
+  return i < extra * (size + 1) ? Math.floor(i / (size + 1)) + 1 : extra + Math.floor((i - extra * (size + 1)) / size) + 1;
+};
+const allLate = d3.sum(states, (d) => d.late_orders);
+const seller_split = [true, false].map((worst) => {
+  const group = ranked.filter((d, i) => (ntile(i, ranked.length, 10) === 1) === worst);
+  const late = d3.sum(group, (d) => d.late_orders);
+  const delivered = d3.sum(group, (d) => d.delivered_orders);
+  return {worst_10pct: worst, sellers: group.length, orders: delivered, late_rate: late / delivered, share_of_all_late: late / allLate};
+});
 ```
 
 ```js
-const worst = seller_split.get(0);
-const rest = seller_split.get(1);
+const worst = seller_split[0];
+const rest = seller_split[1];
 ```
 
 The worst 10% of sellers with 50+ delivered orders (${worst.sellers} sellers, ${integer(worst.orders)} orders) are late on **${pct(worst.late_rate)}** of their orders, against ${pct(rest.late_rate)} for the other ${rest.sellers}. Still, they cause only ${pct(worst.share_of_all_late, 0)} of all late deliveries: most delays are spread across the network. Sellers are identified by the first 8 characters of their anonymised id.
 
-```sql id=worst_sellers
-select seller, seller_state, delivered_orders, late_rate, avg_days_late, avg_review_score
-from sellers
-order by late_rate desc, seller
-limit 15
+```js
+const worst_sellers = ranked.slice(0, 15).map(({seller, seller_state, delivered_orders, late_rate, avg_days_late, avg_review_score}) => ({seller, seller_state, delivered_orders, late_rate, avg_days_late, avg_review_score}));
 ```
 
 ```js

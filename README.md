@@ -40,8 +40,8 @@ Kaggle (9 CSV) ─► scripts/download.py ─► data/raw/                      
    ─► dbt + DuckDB: staging ─► intermediate ─► marts, 53 data tests    (olist.duckdb, not in git)
    ─► scripts/export_marts.py ─► data/marts/*.parquet + statistics     (in git, ~19 MB)
    ─► notebooks/: statistics and charts
-   ─► site/: Observable Framework; overview and growth from build-time aggregates,
-             other pages filtered in the browser with DuckDB ─► GitHub Pages
+   ─► scripts/export_marts.py site-data ─► ~0.5 MB of JSON/CSV aggregates
+   ─► site/: Observable Framework, filters computed in the page ─► GitHub Pages
 ```
 
 - **SQL models** ([`dbt/models`](dbt/models)): typed staging views, one enriched row per order, and marts per question: `fct_orders`, `dim_customers`, `mart_monthly_kpis`, `mart_cohort_retention`, `mart_rfm`, `mart_delivery_performance` and others.

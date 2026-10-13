@@ -34,8 +34,8 @@ Kaggle (9 CSV) ─► scripts/download.py ─► data/raw/                      
    ─► dbt + DuckDB: staging ─► intermediate ─► marts, 53 теста данных    (olist.duckdb, не в git)
    ─► scripts/export_marts.py ─► data/marts/*.parquet + статистика       (в git, ~19 МБ)
    ─► notebooks/: статистика и графики
-   ─► site/: Observable Framework; главная и рост — из агрегатов, посчитанных при сборке,
-             остальные страницы фильтруются в браузере через DuckDB ─► GitHub Pages
+   ─► scripts/export_marts.py site-data ─► ~0,5 МБ агрегатов в JSON/CSV
+   ─► site/: Observable Framework, фильтры считаются на странице ─► GitHub Pages
 ```
 
 - **SQL-модели** ([`dbt/models`](dbt/models)): типизированный слой staging, одна обогащённая строка на заказ и витрины под каждый вопрос: `fct_orders`, `dim_customers`, `mart_monthly_kpis`, `mart_cohort_retention`, `mart_rfm`, `mart_delivery_performance` и другие.

@@ -15,7 +15,7 @@ title: Methodology
 1. Raw CSV files are loaded into DuckDB by **dbt**, in three layers: *staging* (types, names, translations), *intermediate* (one row per order) and *marts* (facts, dimensions and one table per business question).
 2. **53 dbt tests** check keys, relationships, accepted values and business rules on every build. In CI they run on a sample of real rows chosen to contain every edge case found during profiling.
 3. The statistics (bootstrap confidence intervals, Mann–Whitney U, rank-biserial correlation, checks inside states) live in one Python module used by both the notebooks and the dashboard build, so the two can never disagree.
-4. This site is built with **Observable Framework**. Every number in its charts and findings comes from SQL over the marts: the overview and growth pages use aggregates computed when the site is built, so they open instantly; the retention, customer and delivery pages query small aggregates in the browser with DuckDB.
+4. This site is built with **Observable Framework**. Every number in its charts and findings comes from SQL over the marts, run when the site is built; the pages receive about half a megabyte of small aggregates and apply the filters themselves, so every page opens in a second or two.
 
 Code, SQL models and notebooks: [github.com/mvakh975-wq/olist-analytics](https://github.com/mvakh975-wq/olist-analytics).
 

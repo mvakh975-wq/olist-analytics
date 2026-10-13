@@ -1,3 +1,5 @@
+import json
+
 import duckdb
 
 from scripts.export_marts import EXPORT_TABLES, SITE_TABLES, build_site_data, export
@@ -43,52 +45,46 @@ def site_data(built_db, tmp_path):
 
 def test_site_data_files(built_db, tmp_path):
     out = site_data(built_db, tmp_path)
-    assert sorted(p.stem for p in out.glob("*.parquet")) == sorted(SITE_TABLES)
+    assert sorted(p.stem for p in out.glob("*.json") if p.stem != "overview") == sorted(SITE_TABLES)
+    assert not list(out.glob("*.parquet")), "pages read JSON; no parquet should be shipped"
 
 
 def test_site_data_has_no_customer_or_order_ids(built_db, tmp_path):
     out = site_data(built_db, tmp_path)
-    for path in out.glob("*.parquet"):
-        columns = {
-            c for (c,) in duckdb.sql(f"select name from parquet_schema('{path}')").fetchall()
-        }
-        assert not columns & {"customer_unique_id", "customer_id", "order_id"}, path.name
+    for path in out.glob("*.json"):
+        rows = json.loads(path.read_text())
+        keys = set(rows[0]) if isinstance(rows, list) and rows else set()
+        assert not keys & {"customer_unique_id", "customer_id", "order_id"}, path.name
 
 
 def test_site_data_rebuild_is_idempotent(built_db, tmp_path):
     out = site_data(built_db, tmp_path)
     build_site_data(tmp_path / "marts", out, min_seller_orders=1)
-    assert sorted(p.stem for p in out.glob("*.parquet")) == sorted(SITE_TABLES)
+    assert sorted(p.stem for p in out.glob("*.json") if p.stem != "overview") == sorted(SITE_TABLES)
 
 
 def test_site_data_uses_browser_friendly_number_types(built_db, tmp_path):
-    # BIGINT arrives in the browser as BigInt and DECIMAL as an object; charts need plain numbers
+    # pages use the values as they come: plain numbers, booleans, ISO dates, null for "no value"
     out = site_data(built_db, tmp_path)
-    for path in out.glob("*.parquet"):
-        types = {
-            t
-            for (t,) in duckdb.sql(
-                f"select column_type from (describe select * from '{path}')"
-            ).fetchall()
-        }
-        assert not {t for t in types if t.startswith(("BIGINT", "HUGEINT", "DECIMAL"))}, (
-            path.name,
-            types,
-        )
+    for name in SITE_TABLES:
+        rows = json.loads((out / f"{name}.json").read_text())
+        assert isinstance(rows, list), name
+        for row in rows:
+            for key, value in row.items():
+                assert value is None or isinstance(value, int | float | bool | str), (name, key)
+    cohorts = json.loads((out / "cohort_retention.json").read_text())
+    assert cohorts and isinstance(cohorts[0]["retention"], float)
+    assert isinstance(cohorts[0]["is_analysis_period"], bool)
+    assert len(cohorts[0]["cohort_month"]) == 10  # YYYY-MM-DD
 
 
 def columns(path):
-    return [
-        c
-        for (c,) in duckdb.sql(
-            f"select column_name from (describe select * from '{path}')"
-        ).fetchall()
-    ]
+    return list(json.loads(path.read_text())[0])
 
 
 def test_seller_and_state_delivery_cover_the_analysis_period_only(built_db, tmp_path):
     out = site_data(built_db, tmp_path)
-    assert columns(out / "sellers_delivery.parquet") == [
+    assert columns(out / "sellers_delivery.json") == [
         "seller",
         "seller_state",
         "delivered_orders",
@@ -97,9 +93,9 @@ def test_seller_and_state_delivery_cover_the_analysis_period_only(built_db, tmp_
         "avg_days_late",
         "avg_review_score",
     ]
-    assert "late_delay_days_sum" in columns(out / "delivery_by_state.parquet")
+    assert "late_delay_days_sum" in columns(out / "delivery_by_state.json")
     ((site_late,),) = duckdb.sql(
-        f"select sum(late_orders) from '{out / 'delivery_by_state.parquet'}'"
+        f"select sum(late_orders) from read_json('{out / 'delivery_by_state.json'}')"
     ).fetchall()
     ((mart_late,),) = query(
         built_db,
@@ -109,8 +105,6 @@ def test_seller_and_state_delivery_cover_the_analysis_period_only(built_db, tmp_
 
 
 def test_overview_numbers_match_the_marts(built_db, tmp_path):
-    import json
-
     out = site_data(built_db, tmp_path)
     o = json.loads((out / "overview.json").read_text())
     ((gmv_2018,),) = query(

@@ -1,26 +1,31 @@
 ---
 title: Customers
-sql:
-  segments: ./data/rfm_segments.parquet
 ---
 
 ```js
 import {integer, pct, brl} from "./components/format.js";
+
+// one row per segment, computed when the site is built (scripts/export_marts.py)
+const segments = await FileAttachment("data/rfm_segments.json").json();
 ```
 
 # Who are our customers?
 
 <p class="lede">RFM segmentation per person. Recency and monetary value are split into quintiles (5 = best). Frequency is 1, 2 or 3+ orders, because almost every customer bought once and frequency quintiles would put everyone in the same bucket.</p>
 
-```sql id=seg
-select segment,
-       customers,
-       customers / sum(customers) over () as share_of_customers,
-       revenue / sum(revenue) over () as share_of_revenue,
-       revenue / customers as revenue_per_customer,
-       median_recency_days
-from segments
-order by share_of_revenue desc
+```js
+const totalCustomers = d3.sum(segments, (d) => d.customers);
+const totalRevenue = d3.sum(segments, (d) => d.revenue);
+const seg = segments
+  .map((d) => ({
+    segment: d.segment,
+    customers: d.customers,
+    share_of_customers: d.customers / totalCustomers,
+    share_of_revenue: d.revenue / totalRevenue,
+    revenue_per_customer: d.revenue / d.customers,
+    median_recency_days: d.median_recency_days
+  }))
+  .sort((a, b) => b.share_of_revenue - a.share_of_revenue);
 ```
 
 ```js

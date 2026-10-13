@@ -8,5 +8,5 @@ export const signed = (value, digits = 2) => d3.format(`+.${digits}f`)(value).re
 export const stars = (value) => d3.format(".2f")(value);
 export const month = d3.utcFormat("%b %Y");
 
-/** Arrow DATE columns can arrive as numbers (ms); charts need Date objects. */
+/** Dates arrive as ISO strings in the JSON aggregates; charts need Date objects. */
 export const asDate = (value) => (value instanceof Date ? value : new Date(value));
