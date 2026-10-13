@@ -1,33 +1,30 @@
 ---
 title: Growth
-sql:
-  kpis: ./data/monthly_kpis.parquet
-  gmv: ./data/gmv_by_month_category_state.parquet
 ---
 
 ```js
-import {integer, pct, millionsBRL, brl, asDate} from "./components/format.js";
+import {pct, millionsBRL, brl} from "./components/format.js";
+
+// ~85 kB of pre-aggregated rows (scripts/export_marts.py): filtering them here is instant,
+// so this page does not need to load the in-browser database
+const parseMonth = d3.utcParse("%Y-%m");
+const gmv = (await FileAttachment("data/growth_gmv.csv").csv()).map((d) => ({...d, gmv: +d.gmv}));
+const kpis = (await FileAttachment("data/growth_kpis.csv").csv()).map((d) => ({
+  month: d.month,
+  avg_order_value: +d.avg_order_value,
+  freight_share: +d.freight_share
+}));
+const amount = (value) => (value >= 1e6 ? millionsBRL(value) : brl(value));
+const inYear = (year) => (d) => d.month >= `${year}-01` && d.month <= `${year}-08`;
 ```
 
 # Is the business growing?
 
 <p class="lede">Monthly GMV (items + freight, BRL) over the analysis period, January 2017 – August 2018. Filter by period, customer state and product category.</p>
 
-```sql id=state_options
-select distinct customer_state from gmv where customer_state is not null order by 1
-```
-
-```sql id=month_options
-select strftime(month, '%Y-%m-%d') as month from kpis where is_analysis_period order by 1
-```
-
-```sql id=category_options
-select category from gmv where is_analysis_period group by 1 order by sum(gmv) desc
-```
-
 ```js
-const months = [...month_options].map((d) => d.month);
-const monthLabel = (m) => d3.utcFormat("%b %Y")(new Date(m));
+const months = kpis.map((d) => d.month);
+const monthLabel = (m) => d3.utcFormat("%b %Y")(parseMonth(m));
 const from = view(Inputs.select(months, {label: "From", format: monthLabel, value: months[0]}));
 const to = view(Inputs.select(months, {label: "To", format: monthLabel, value: months.at(-1)}));
 ```
@@ -38,43 +35,28 @@ const [start, end] = from <= to ? [from, to] : [to, from];
 ```
 
 ```js
-const state = view(Inputs.select(["All states", ...[...state_options].map((d) => d.customer_state)], {label: "Customer state"}));
-const category = view(Inputs.select(["All categories", ...[...category_options].map((d) => d.category)], {label: "Category"}));
-```
-
-```sql id=monthly
--- every month of the period, so months without sales show as 0 instead of being skipped
-with months as (
-  select month from kpis
-  where is_analysis_period and month between cast(${start} as date) and cast(${end} as date)
-)
-select m.month, coalesce(sum(g.gmv), 0) as gmv
-from months as m
-left join gmv as g
-  on g.month = m.month
-  and (${state} = 'All states' or g.customer_state = ${state})
-  and (${category} = 'All categories' or g.category = ${category})
-group by m.month
-order by m.month
-```
-
-```sql id=yoy
-select
-  sum(gmv) filter (where month between '2017-01-01' and '2017-08-01') as gmv_2017,
-  sum(gmv) filter (where month between '2018-01-01' and '2018-08-01') as gmv_2018
-from gmv
-where (${state} = 'All states' or customer_state = ${state})
-  and (${category} = 'All categories' or category = ${category})
+const states = [...new Set(gmv.map((d) => d.state))].sort();
+const categories = d3.groupSort(gmv, (rows) => -d3.sum(rows, (d) => d.gmv), (d) => d.category);
+const state = view(Inputs.select(["All states", ...states], {label: "Customer state"}));
+const category = view(Inputs.select(["All categories", ...categories], {label: "Category"}));
 ```
 
 ```js
-const g = yoy.get(0);
-const growth = g.gmv_2017 > 0 ? g.gmv_2018 / g.gmv_2017 - 1 : null;
+const byState = state === "All states" ? gmv : gmv.filter((d) => d.state === state);
+const selected = category === "All categories" ? byState : byState.filter((d) => d.category === category);
+const totals = d3.rollup(selected, (rows) => d3.sum(rows, (d) => d.gmv), (d) => d.month);
+// every month of the period, so months without sales show as 0 instead of being skipped
+const monthly = months
+  .filter((m) => m >= start && m <= end)
+  .map((m) => ({month: parseMonth(m), gmv: totals.get(m) ?? 0}));
+const gmv2017 = d3.sum(selected.filter(inYear(2017)), (d) => d.gmv);
+const gmv2018 = d3.sum(selected.filter(inYear(2018)), (d) => d.gmv);
+const growth = gmv2017 > 0 ? gmv2018 / gmv2017 - 1 : null;
 ```
 
 <div class="card">
   <h2>${growth === null ? "Monthly GMV" : `GMV ${growth >= 0 ? "grew" : "fell"} ${pct(Math.abs(growth), 0)} year over year (Jan–Aug 2018 vs Jan–Aug 2017)`}</h2>
-  <h3>${state}, ${category} · ${millionsBRL(g.gmv_2018 ?? 0)} in Jan–Aug 2018</h3>
+  <h3>${state}, ${category} · ${amount(gmv2018)} in Jan–Aug 2018</h3>
   ${resize((width) => Plot.plot({
     width,
     height: 300,
@@ -84,25 +66,25 @@ const growth = g.gmv_2017 > 0 ? g.gmv_2018 / g.gmv_2017 - 1 : null;
     y: {grid: true, label: "GMV, thousand BRL", tickFormat: (d) => (d / 1e3).toLocaleString("en-US")},
     marks: [
       Plot.ruleY([0]),
-      Plot.lineY(monthly, {x: (d) => asDate(d.month), y: "gmv", stroke: "var(--accent)", strokeWidth: 2}),
-      Plot.dot(monthly, {x: (d) => asDate(d.month), y: "gmv", fill: "var(--accent)", r: 3}),
-      Plot.tip(monthly, Plot.pointerX({x: (d) => asDate(d.month), y: "gmv", title: (d) => `${d3.utcFormat("%B %Y")(asDate(d.month))}\nGMV: ${brl(d.gmv)}`}))
+      Plot.lineY(monthly, {x: "month", y: "gmv", stroke: "var(--accent)", strokeWidth: 2}),
+      Plot.dot(monthly, {x: "month", y: "gmv", fill: "var(--accent)", r: 3}),
+      Plot.tip(monthly, Plot.pointerX({x: "month", y: "gmv", title: (d) => `${d3.utcFormat("%B %Y")(d.month)}\nGMV: ${brl(d.gmv)}`}))
     ]
   }))}
 </div>
 
 ## Which categories drove the growth?
 
-```sql id=categories
-select
-  category,
-  coalesce(sum(gmv) filter (where month between '2018-01-01' and '2018-08-01'), 0)
-    - coalesce(sum(gmv) filter (where month between '2017-01-01' and '2017-08-01'), 0) as gmv_change
-from gmv
-where (${state} = 'All states' or customer_state = ${state})
-group by category
-order by gmv_change desc
-limit 10
+```js
+const change = d3.rollups(
+  byState,
+  (rows) => d3.sum(rows.filter(inYear(2018)), (d) => d.gmv) - d3.sum(rows.filter(inYear(2017)), (d) => d.gmv),
+  (d) => d.category
+);
+const topCategories = change
+  .map(([category, gmv_change]) => ({category, gmv_change}))
+  .sort((a, b) => b.gmv_change - a.gmv_change)
+  .slice(0, 10);
 ```
 
 <div class="card">
@@ -115,7 +97,7 @@ limit 10
     x: {grid: true, label: "GMV added, thousand BRL", tickFormat: (d) => (d / 1e3).toLocaleString("en-US")},
     y: {label: null},
     marks: [
-      Plot.barX(categories, {y: "category", x: "gmv_change", fill: "var(--accent)", sort: {y: "-x"}, insetTop: 3, insetBottom: 3, tip: {format: {x: (d) => brl(d)}}}),
+      Plot.barX(topCategories, {y: "category", x: "gmv_change", fill: "var(--accent)", sort: {y: "-x"}, insetTop: 3, insetBottom: 3, tip: {format: {x: (d) => brl(d)}}}),
       Plot.ruleX([0])
     ]
   }))}
@@ -125,10 +107,8 @@ limit 10
 
 <p class="chart-note">These two charts follow the period filter and cover all states and categories.</p>
 
-```sql id=kpiRows
-select month, avg_order_value, freight_share from kpis
-where is_analysis_period and month between cast(${start} as date) and cast(${end} as date)
-order by month
+```js
+const kpiRows = kpis.filter((d) => d.month >= start && d.month <= end).map((d) => ({...d, month: parseMonth(d.month)}));
 ```
 
 <div class="grid grid-cols-2">
@@ -141,7 +121,7 @@ order by month
       x: {type: "utc", label: "Purchase month", tickFormat: "%b %y"},
       y: {grid: true, label: "Average order value, BRL", domain: [0, 200]},
       marks: [
-        Plot.lineY(kpiRows, {x: (d) => asDate(d.month), y: "avg_order_value", stroke: "var(--accent)", strokeWidth: 2, tip: {format: {y: (d) => brl(d)}}}),
+        Plot.lineY(kpiRows, {x: "month", y: "avg_order_value", stroke: "var(--accent)", strokeWidth: 2, tip: {format: {y: (d) => brl(d)}}}),
         Plot.ruleY([0])
       ]
     }))}
@@ -155,7 +135,7 @@ order by month
       x: {type: "utc", label: "Purchase month", tickFormat: "%b %y"},
       y: {grid: true, label: "Freight share of GMV, %", percent: true, domain: [0, 20]},
       marks: [
-        Plot.lineY(kpiRows, {x: (d) => asDate(d.month), y: "freight_share", stroke: "var(--context)", strokeWidth: 2, tip: true}),
+        Plot.lineY(kpiRows, {x: "month", y: "freight_share", stroke: "var(--context)", strokeWidth: 2, tip: true}),
         Plot.ruleY([0])
       ]
     }))}

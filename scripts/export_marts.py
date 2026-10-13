@@ -27,13 +27,6 @@ EXPORT_TABLES = (
 # Aggregates for the dashboard, built from the committed parquet marts ({m} = marts directory).
 # Measures are stored as sums and counts so pages can re-aggregate them after filtering.
 SITE_TABLES = {
-    "monthly_kpis": "select * from '{m}/mart_monthly_kpis.parquet'",
-    "gmv_by_month_category_state": """
-        select purchase_month as month, category, customer_state, is_analysis_period,
-               sum(price + freight_value) as gmv
-        from '{m}/fct_order_items.parquet'
-        where is_valid_order
-        group by all""",
     "cohort_retention": "select * from '{m}/mart_cohort_retention.parquet'",
     "orders_per_customer": """
         select n_orders, count(*) as customers
@@ -171,6 +164,22 @@ select
         / (select count(*) from deliveries where is_late) as worst_sellers_share_of_late
 """
 
+# the Growth page filters these small files in the browser instead of loading DuckDB
+GROWTH_CSV = {
+    "growth_gmv": """
+        select strftime(purchase_month, '%Y-%m') as month, category, customer_state as state,
+               round(sum(price + freight_value), 2)::double as gmv
+        from '{m}/fct_order_items.parquet'
+        where is_valid_order and is_analysis_period
+        group by all""",
+    "growth_kpis": """
+        select strftime(month, '%Y-%m') as month,
+               round(avg_order_value, 4)::double as avg_order_value,
+               round(freight_share, 6)::double as freight_share
+        from '{m}/mart_monthly_kpis.parquet'
+        where is_analysis_period""",
+}
+
 EFFECT = """
 select mean_on_time, mean_late, diff, ci_low, ci_high
 from '{m}/stats_delay_effect.parquet' where comparison = 'late vs on time'
@@ -202,6 +211,10 @@ def build_site_data(marts_dir: Path, out_dir: Path, min_seller_orders: int = 50)
         path = out_dir / f"{name}.parquet"
         query = _browser_types(con, sql.format(m=marts_dir, min_seller_orders=min_seller_orders))
         con.execute(f"copy ({query} order by all) to '{path}' (format parquet, compression zstd)")
+    for name, sql in GROWTH_CSV.items():
+        con.execute(
+            f"copy ({sql.format(m=marts_dir)} order by all) to '{out_dir / name}.csv' (header)"
+        )
     overview = build_overview(marts_dir, out_dir)
     (out_dir / "overview.json").write_text(json.dumps(overview, indent=2) + "\n")
 

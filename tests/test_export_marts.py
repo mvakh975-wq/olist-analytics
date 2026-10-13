@@ -46,19 +46,6 @@ def test_site_data_files(built_db, tmp_path):
     assert sorted(p.stem for p in out.glob("*.parquet")) == sorted(SITE_TABLES)
 
 
-def test_site_gmv_reconciles_with_marts(built_db, tmp_path):
-    out = site_data(built_db, tmp_path)
-    ((site_monthly,),) = duckdb.sql(
-        f"select sum(gmv) from '{out / 'monthly_kpis.parquet'}'"
-    ).fetchall()
-    ((site_by_cat,),) = duckdb.sql(
-        f"select sum(gmv) from '{out / 'gmv_by_month_category_state.parquet'}'"
-    ).fetchall()
-    ((mart,),) = query(built_db, "select sum(gmv) from mart_monthly_kpis")
-    assert float(site_monthly) == float(mart)
-    assert round(float(site_by_cat), 2) == round(float(mart), 2)
-
-
 def test_site_data_has_no_customer_or_order_ids(built_db, tmp_path):
     out = site_data(built_db, tmp_path)
     for path in out.glob("*.parquet"):
@@ -97,12 +84,6 @@ def columns(path):
             f"select column_name from (describe select * from '{path}')"
         ).fetchall()
     ]
-
-
-def test_category_aggregate_has_only_additive_measures(built_db, tmp_path):
-    # order counts per category double-count orders that span categories
-    out = site_data(built_db, tmp_path)
-    assert "orders" not in columns(out / "gmv_by_month_category_state.parquet")
 
 
 def test_seller_and_state_delivery_cover_the_analysis_period_only(built_db, tmp_path):
@@ -182,3 +163,23 @@ def test_overview_numbers_match_the_marts(built_db, tmp_path):
         for k, v in o.items()
         if k not in {"late_sp", "late_rj", "late_ma", "state_gap_min", "state_gap_max"}
     )
+
+
+def test_growth_page_files_are_small_csvs_that_reconcile(built_db, tmp_path):
+    # the Growth page filters these in the browser without loading DuckDB
+    out = site_data(built_db, tmp_path)
+    gmv = duckdb.sql(f"select * from read_csv('{out / 'growth_gmv.csv'}')")
+    assert gmv.columns == ["month", "category", "state", "gmv"]
+    ((site_total,),) = duckdb.sql(
+        f"select sum(gmv) from read_csv('{out / 'growth_gmv.csv'}')"
+    ).fetchall()
+    ((mart_total,),) = query(
+        built_db, "select sum(gmv) from mart_monthly_kpis where is_analysis_period"
+    )
+    assert abs(site_total - float(mart_total)) < 0.01
+    kpis = duckdb.sql(f"select * from read_csv('{out / 'growth_kpis.csv'}')")
+    assert kpis.columns == ["month", "avg_order_value", "freight_share"]
+    ((months,),) = query(
+        built_db, "select count(*) from mart_monthly_kpis where is_analysis_period"
+    )
+    assert len(kpis.fetchall()) == months
