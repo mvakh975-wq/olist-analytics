@@ -9,7 +9,7 @@ dbt/dbt_packages/
 logs/
 .ipynb_checkpoints/
 site/node_modules/
-site/.evidence/
-site/build/
-site/sources/olist/*.duckdb
+site/dist/
+site/src/.observablehq/cache/
+site/src/data/
 .DS_Store
