@@ -26,7 +26,11 @@ reviews as (
     -- some orders have several reviews with different scores: keep the last answered one
     select
         order_id,
-        first(review_score order by review_answered_at desc) as review_score
+        -- created date and id break ties so the pick never depends on row order
+        first(
+            review_score
+            order by review_answered_at desc, review_created_at desc, review_id desc
+        ) as review_score
     from {{ ref('stg_order_reviews') }}
     group by order_id
 ),

@@ -45,3 +45,17 @@ def test_recency_score_rewards_recent_customers(built_db):
              (select r_score from mart_rfm order by recency_days desc, customer_unique_id limit 1)""",
     )
     assert rows == [(5, 1)]
+
+
+def test_high_value_one_time_buyers_who_are_not_recent_are_at_risk(built_db):
+    # a high spender who bought once and not recently is worth a win-back, not "low-cost only"
+    rows = query(
+        built_db,
+        """select count(*) from mart_rfm
+           where f_score = 1 and r_score <= 3 and m_score >= 4 and segment <> 'At risk high-value'""",
+    )
+    assert rows == [(0,)]
+    ((n,),) = query(
+        built_db, "select count(*) from mart_rfm where f_score = 1 and r_score = 3 and m_score >= 4"
+    )
+    assert n >= 1, "fixture must contain the r_score = 3 case"

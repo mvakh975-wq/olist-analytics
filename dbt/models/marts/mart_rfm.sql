@@ -44,7 +44,7 @@ select
         when f_score >= 2 then 'Loyal'
         when r_score >= 4 and m_score >= 4 then 'Promising high-value'
         when r_score >= 4 then 'Recent'
-        when r_score <= 2 and m_score >= 4 then 'At risk high-value'
+        when r_score <= 3 and m_score >= 4 then 'At risk high-value'
         else 'Hibernating'
     end as segment
 from scored
