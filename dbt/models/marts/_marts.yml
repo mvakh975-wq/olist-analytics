@@ -71,3 +71,13 @@ models:
           - accepted_values:
               arguments:
                 values: [Champions, Loyal, Promising high-value, Recent, At risk high-value, Hibernating]
+
+  - name: mart_delivery_performance
+    description: >
+      Delivered orders with a measurable delay (delivered date - estimated date), bucketed,
+      with the review score (NULL when there is no review) and a 1–2 star flag.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: delay_bucket
+        data_tests: [not_null]
