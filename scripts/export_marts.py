@@ -5,10 +5,13 @@ Usage: python -m scripts.export_marts export|site-data
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 import duckdb
+
+from scripts.stats import write_delay_stats
 
 EXPORT_TABLES = (
     "fct_orders",
@@ -27,8 +30,7 @@ SITE_TABLES = {
     "monthly_kpis": "select * from '{m}/mart_monthly_kpis.parquet'",
     "gmv_by_month_category_state": """
         select purchase_month as month, category, customer_state, is_analysis_period,
-               sum(price + freight_value) as gmv,
-               count(distinct order_id) as orders
+               sum(price + freight_value) as gmv
         from '{m}/fct_order_items.parquet'
         where is_valid_order
         group by all""",
@@ -62,14 +64,25 @@ SITE_TABLES = {
         select customer_state,
                count(*) as orders,
                count(*) filter (where is_late) as late_orders,
-               sum(delivery_days) as delivery_days_sum
+               sum(delivery_days) as delivery_days_sum,
+               sum(delay_days) filter (where is_late) as late_delay_days_sum
         from '{m}/mart_delivery_performance.parquet'
         where is_analysis_period
         group by all""",
+    # delivered orders in the analysis period, attributed to the main seller
     "sellers_delivery": """
-        select left(seller_id, 8) as seller, seller_state, n_orders, late_rate, avg_review_score
-        from '{m}/dim_sellers.parquet'
-        where n_orders >= 50""",
+        select left(d.main_seller_id, 8) as seller,
+               any_value(s.seller_state) as seller_state,
+               count(*) as delivered_orders,
+               count(*) filter (where d.is_late) as late_orders,
+               count(*) filter (where d.is_late) / count(*) as late_rate,
+               avg(d.delay_days) filter (where d.is_late) as avg_days_late,
+               avg(d.review_score) as avg_review_score
+        from '{m}/mart_delivery_performance.parquet' as d
+        left join '{m}/dim_sellers.parquet' as s on d.main_seller_id = s.seller_id
+        where d.is_analysis_period
+        group by d.main_seller_id
+        having count(*) >= {min_seller_orders}""",
     "stats_delay_effect": "select * from '{m}/stats_delay_effect.parquet'",
     "stats_delay_by_state": "select * from '{m}/stats_delay_by_state.parquet'",
 }
@@ -90,7 +103,8 @@ def export(db: Path, out_dir: Path) -> list[Path]:
                 "(format parquet, compression zstd)"
             )
             paths.append(path)
-    return paths
+    # the dashboard's statistics come from the same marts, so they are rebuilt here too
+    return paths + write_delay_stats(db, out_dir)
 
 
 def _browser_types(con: duckdb.DuckDBPyConnection, sql: str) -> str:
@@ -110,13 +124,86 @@ def _browser_types(con: duckdb.DuckDBPyConnection, sql: str) -> str:
     return f"select {', '.join(columns)} from ({sql})"
 
 
-def build_site_data(marts_dir: Path, out_dir: Path) -> None:
+# every number on the overview page, computed once at build time so the page needs no database
+OVERVIEW = """
+with kpis as (select * from '{m}/mart_monthly_kpis.parquet'),
+     deliveries as (select * from '{m}/mart_delivery_performance.parquet' where is_analysis_period),
+     customers as (select * from '{m}/dim_customers.parquet'),
+     cohorts as (select * from '{m}/mart_cohort_retention.parquet'),
+     rfm as (select * from '{m}/mart_rfm.parquet'),
+     by_state as (select * from '{m}/stats_delay_by_state.parquet'),
+     sellers as (select *, ntile(10) over (order by late_rate desc, seller) as decile
+                 from '{site}/sellers_delivery.parquet')
+select
+    (select sum(gmv) from kpis where month between '2018-01-01' and '2018-08-01') as gmv_2018,
+    (select sum(gmv) from kpis where month between '2017-01-01' and '2017-08-01') as gmv_2017,
+    (select sum(orders) from kpis where month between '2018-01-01' and '2018-08-01') as orders_2018,
+    (select sum(orders) from kpis where month between '2017-01-01' and '2017-08-01') as orders_2017,
+    (select sum(gmv) / sum(orders) from kpis where month between '2018-01-01' and '2018-08-01') as aov_2018,
+    (select sum(gmv) / sum(orders) from kpis where month between '2017-01-01' and '2017-08-01') as aov_2017,
+    (select sum(gmv) / sum(orders) from kpis where is_analysis_period) as aov,
+    (select max(gmv) from kpis where month = '2017-11-01') as black_friday_gmv,
+    (select avg(is_late::int) from deliveries) as late_rate,
+    (select avg(is_late::int) from deliveries where purchase_month between '2017-01-01' and '2017-08-01') as late_rate_2017,
+    (select avg(is_late::int) from deliveries where purchase_month between '2018-01-01' and '2018-08-01') as late_rate_2018,
+    (select count(*) from customers) as customers,
+    (select count(*) filter (where n_orders > 1) / count(*) from customers) as repeat_share,
+    (select sum(active_customers) / sum(cohort_size) from cohorts
+     where is_analysis_period and months_since_first = 1) as month1_retention,
+    (select avg(is_low_score::int) from deliveries where delay_bucket_order = 1) as low_score_on_time,
+    (select avg(is_low_score::int) from deliveries where delay_bucket_order = 3) as low_score_late_4_7,
+    (select avg(is_late::int) from deliveries where customer_state = 'SP') as late_sp,
+    (select avg(is_late::int) from deliveries where customer_state = 'RJ') as late_rj,
+    (select avg(is_late::int) from deliveries where customer_state = 'MA') as late_ma,
+    (select avg(is_late::int) from deliveries where purchase_month = '2017-11-01') as late_nov_2017,
+    (select avg(is_late::int) from deliveries where purchase_month = '2018-03-01') as late_mar_2018,
+    (select count(*) filter (where segment in ('Promising high-value', 'At risk high-value')) / count(*)
+     from rfm) as high_value_customer_share,
+    (select sum(monetary) filter (where segment in ('Promising high-value', 'At risk high-value'))
+            / sum(monetary) from rfm) as high_value_revenue_share,
+    (select count(*) from by_state) as states_tested,
+    (select max(diff) from by_state) as state_gap_min,
+    (select min(diff) from by_state) as state_gap_max,
+    (select count(*) from sellers where decile = 1) as worst_sellers,
+    (select sum(late_orders) / sum(delivered_orders) from sellers where decile = 1) as worst_sellers_late,
+    (select sum(late_orders) / sum(delivered_orders) from sellers where decile > 1) as other_sellers_late,
+    (select sum(late_orders) filter (where decile = 1) from sellers)
+        / (select count(*) from deliveries where is_late) as worst_sellers_share_of_late
+"""
+
+EFFECT = """
+select mean_on_time, mean_late, diff, ci_low, ci_high
+from '{m}/stats_delay_effect.parquet' where comparison = 'late vs on time'
+"""
+
+
+def _plain(value):
+    """JSON-friendly Python number (DuckDB returns Decimal for sums of decimals)."""
+    if value is None or isinstance(value, int | float | str):
+        return value
+    return float(value)
+
+
+def build_overview(marts_dir: Path, site_dir: Path) -> dict:
+    con = duckdb.connect()
+    rel = con.sql(OVERVIEW.format(m=marts_dir, site=site_dir))
+    overview = {k: _plain(v) for k, v in zip(rel.columns, rel.fetchone(), strict=True)}
+    effect = con.sql(EFFECT.format(m=marts_dir))
+    overview["effect"] = {
+        k: _plain(v) for k, v in zip(effect.columns, effect.fetchone(), strict=True)
+    }
+    return overview
+
+
+def build_site_data(marts_dir: Path, out_dir: Path, min_seller_orders: int = 50) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     for name, sql in SITE_TABLES.items():
         path = out_dir / f"{name}.parquet"
-        query = _browser_types(con, sql.format(m=marts_dir))
+        query = _browser_types(con, sql.format(m=marts_dir, min_seller_orders=min_seller_orders))
         con.execute(f"copy ({query} order by all) to '{path}' (format parquet, compression zstd)")
+    overview = build_overview(marts_dir, out_dir)
+    (out_dir / "overview.json").write_text(json.dumps(overview, indent=2) + "\n")
 
 
 def main(argv: list[str]) -> int:

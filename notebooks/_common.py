@@ -1,13 +1,17 @@
 """Shared helpers for the analysis notebooks."""
 
+import sys
 from pathlib import Path
 
 import duckdb
 import matplotlib.pyplot as plt
-import numpy as np
 
-DB = Path(__file__).resolve().parents[1] / "olist.duckdb"
-MARTS = Path(__file__).resolve().parents[1] / "data" / "marts"
+ROOT = Path(__file__).resolve().parents[1]
+DB = ROOT / "olist.duckdb"
+MARTS = ROOT / "data" / "marts"
+
+# lets notebooks import the shared statistics from scripts/
+sys.path.insert(0, str(ROOT))
 
 ACCENT = "#2a78d6"  # main series
 SIGNAL = "#e34948"  # negative values only (late deliveries, low scores)
@@ -30,14 +34,3 @@ plt.rcParams.update(
 
 def con() -> duckdb.DuckDBPyConnection:
     return duckdb.connect(str(DB), read_only=True)
-
-
-def bootstrap_diff_ci(a, b, n: int = 5000, seed: int = 42, alpha: float = 0.05):
-    """Difference of means (b - a) with a percentile bootstrap confidence interval."""
-    rng = np.random.default_rng(seed)
-    a, b = np.asarray(a, float), np.asarray(b, float)
-    diffs = np.empty(n)
-    for k in range(n):
-        diffs[k] = rng.choice(b, b.size).mean() - rng.choice(a, a.size).mean()
-    lo, hi = np.quantile(diffs, [alpha / 2, 1 - alpha / 2])
-    return float(b.mean() - a.mean()), float(lo), float(hi)

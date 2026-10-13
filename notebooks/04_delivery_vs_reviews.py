@@ -8,8 +8,9 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import pandas as pd
-from _common import ACCENT, MARTS, MUTED, SIGNAL, bootstrap_diff_ci, con
-from scipy.stats import mannwhitneyu
+from _common import ACCENT, MUTED, SIGNAL, con
+
+from scripts.stats import delay_by_state, delay_effect
 
 db = con()
 df = db.sql("""
@@ -51,33 +52,8 @@ plt.show()
 
 
 # %%
-def compare(name, a, b):
-    diff, lo, hi = bootstrap_diff_ci(a, b)
-    u, p = mannwhitneyu(a, b, alternative="two-sided")
-    return {
-        "comparison": name,
-        "n_on_time": len(a),
-        "n_late": len(b),
-        "mean_on_time": a.mean(),
-        "mean_late": b.mean(),
-        "diff": diff,
-        "ci_low": lo,
-        "ci_high": hi,
-        "mannwhitney_p": p,
-        "rank_biserial": 1 - 2 * u / (len(a) * len(b)),
-    }
-
-
-on_time = df.loc[~df.is_late, "review_score"].to_numpy()
-late = df.loc[df.is_late, "review_score"].to_numpy()
-very_late = df.loc[df.delay_days >= 15, "review_score"].to_numpy()
-effect = pd.DataFrame(
-    [
-        compare("late vs on time", on_time, late),
-        compare("15+ days late vs on time", on_time, very_late),
-    ]
-)
-effect.to_parquet(MARTS / "stats_delay_effect.parquet", index=False)
+# the same functions build the dashboard's statistics (scripts/stats.py, run by `make export`)
+effect = delay_effect(df)
 effect
 
 # %% [markdown]
@@ -86,21 +62,7 @@ effect
 # shrink inside states. States with at least 300 reviewed deliveries and 30 late ones.
 
 # %%
-rows = []
-for state, g in df.groupby("customer_state"):
-    if len(g) < 300 or g.is_late.sum() < 30:
-        continue
-    rows.append(
-        {
-            "customer_state": state,
-            "n": len(g),
-            "late_share": g.is_late.mean(),
-            "mean_on_time": g.loc[~g.is_late, "review_score"].mean(),
-            "mean_late": g.loc[g.is_late, "review_score"].mean(),
-        }
-    )
-by_state = pd.DataFrame(rows).assign(diff=lambda d: d.mean_late - d.mean_on_time)
-by_state.to_parquet(MARTS / "stats_delay_by_state.parquet", index=False)
+by_state = delay_by_state(df)
 by_state.sort_values("diff")
 
 # %% [markdown]
@@ -180,21 +142,37 @@ plt.show()
 # ## Sellers
 
 # %%
+# delivered orders in the analysis period, attributed to the main seller (most expensive item)
 sellers = db.sql("""
-    select seller_id, seller_state, n_orders, late_rate, avg_review_score
-    from dim_sellers where n_orders >= 50
+    select main_seller_id as seller_id,
+           count(*) as delivered_orders,
+           count(*) filter (where is_late) / count(*) as late_rate,
+           avg(delay_days) filter (where is_late) as avg_days_late,
+           avg(review_score) as avg_review_score
+    from mart_delivery_performance
+    where is_analysis_period
+    group by 1
+    having count(*) >= 50
 """).df()
-print(f"{len(sellers)} sellers with 50+ orders; median late rate {sellers.late_rate.median():.1%}")
+print(
+    f"{len(sellers)} sellers with 50+ delivered orders; median late rate {sellers.late_rate.median():.1%}"
+)
 sellers.sort_values("late_rate", ascending=False).head(10)
 
 # %%
 db.sql("""
-    with s as (select seller_id, late_rate, n_orders from dim_sellers where n_orders >= 50),
-         ranked as (select *, ntile(10) over (order by late_rate desc) as decile from s)
+    with s as (
+        select main_seller_id as seller_id, count(*) as delivered, count(*) filter (where is_late) as late
+        from mart_delivery_performance where is_analysis_period
+        group by 1 having count(*) >= 50
+    ),
+    ranked as (select *, ntile(10) over (order by late / delivered desc, seller_id) as decile from s)
     select decile = 1 as worst_10pct_sellers,
            count(*) as sellers,
-           sum(n_orders) as orders,
-           sum(late_rate * n_orders) / sum(n_orders) as late_rate
+           sum(delivered) as delivered_orders,
+           sum(late) / sum(delivered) as late_rate,
+           sum(late) / (select count(*) from mart_delivery_performance
+                        where is_analysis_period and is_late) as share_of_all_late_deliveries
     from ranked group by 1
 """).df()
 
@@ -211,4 +189,5 @@ db.sql("""
 # - **Where it fails**: late rates spiked in the Black Friday month (12.4% in Nov 2017) and again in
 #   Feb–Mar 2018 (14.1% and 19.0%), against about 3% in calm months of 2017; by state, 4.5% in SP (the largest
 #   market) against 12.1% in RJ and 17.5% in MA;
-#   the worst 10% of sellers with 50+ orders (42 sellers) are late on 15.4% of orders vs 6.2% for the rest.
+#   the worst 10% of sellers with 50+ delivered orders (42 sellers) are late on 15.3% of orders vs 6.2%
+#   for the rest, yet they account for only 11% of all late deliveries.

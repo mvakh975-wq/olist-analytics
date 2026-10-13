@@ -41,4 +41,5 @@ addopts = "-q"
 [tool.ruff.lint.per-file-ignores]
 # inline SQL in tests and notebooks reads better unwrapped
 "tests/*" = ["E501"]
+"scripts/export_marts.py" = ["E501"]
 "notebooks/*" = ["E501", "B018"]  # last expression of a cell is its output

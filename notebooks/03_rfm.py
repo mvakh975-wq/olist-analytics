@@ -54,7 +54,7 @@ plt.show()
 # | Loyal | 2+ orders, not recently | Personalised win-back with category recommendations |
 # | Promising high-value | 1 order, recent, top-40% spend | Second-purchase offer within the first 30 days |
 # | Recent | 1 order, recent, lower spend | Onboarding emails, cross-sell cheap add-ons |
-# | At risk high-value | 1 order, long ago, top-40% spend | Win-back campaign; check whether delivery went wrong |
+# | At risk high-value | 1 order, not recent (bottom 60% by recency), top-40% spend | Win-back campaign; check whether delivery went wrong |
 # | Hibernating | everyone else | Low-cost reactivation only |
 
 # %%
@@ -71,7 +71,8 @@ db.sql("""
 # %% [markdown]
 # ## Findings
 # - **Two high-value one-time segments** — "Promising high-value" (recent) and "At risk high-value"
-#   (long ago) — are 30% of customers and bring 56% of revenue, at ~300 BRL per customer.
+#   (not recent) — are 38% of customers and bring 68% of revenue, at ~300 BRL per customer.
 # - Repeat buyers ("Champions" + "Loyal") are only 3% of customers and 6% of revenue.
-# - Late-delivery rates differ little between segments (5.5–7.3%), so segment membership is not driven
-#   by delivery experience; the next notebook looks at delivery directly.
+# - "At risk high-value" customers had the highest late-delivery rate (8.1% vs 5.5–6.8% elsewhere)
+#   and the lowest mean review score (3.99), so a poor delivery may be part of why they did not
+#   return; the next notebook looks at delivery directly.
