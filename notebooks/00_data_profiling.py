@@ -23,6 +23,7 @@ def sql(query: str) -> pd.DataFrame:
 # %% [markdown]
 # ## Columns: types, nulls, distinct values
 
+
 # %%
 def profile(name: str, path: Path) -> pd.DataFrame:
     rel = con.read_csv(str(path), header=True)
@@ -85,7 +86,9 @@ from 'RAW/olist_orders_dataset.csv' group by 1 order by 1
 """)
 
 # %%
-sql("select order_status, count(*) as orders from 'RAW/olist_orders_dataset.csv' group by 1 order by 2 desc")
+sql(
+    "select order_status, count(*) as orders from 'RAW/olist_orders_dataset.csv' group by 1 order by 2 desc"
+)
 
 # %% [markdown]
 # ## Delivery dates
@@ -115,7 +118,9 @@ from i join p using (order_id)
 """)
 
 # %%
-sql("select payment_type, count(*) as payments from 'RAW/olist_order_payments_dataset.csv' group by 1 order by 2 desc")
+sql(
+    "select payment_type, count(*) as payments from 'RAW/olist_order_payments_dataset.csv' group by 1 order by 2 desc"
+)
 
 # %% [markdown]
 # ## Product categories
@@ -146,4 +151,6 @@ from 'RAW/olist_order_items_dataset.csv'
 """)
 
 # %%
-sql("select review_score, count(*) as reviews from 'RAW/olist_order_reviews_dataset.csv' group by 1 order by 1")
+sql(
+    "select review_score, count(*) as reviews from 'RAW/olist_order_reviews_dataset.csv' group by 1 order by 1"
+)
