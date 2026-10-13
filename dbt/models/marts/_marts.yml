@@ -57,3 +57,17 @@ models:
     data_tests:
       - unique_combination:
           arguments: {columns: [cohort_month, months_since_first]}
+
+  - name: mart_rfm
+    description: >
+      RFM segmentation per person. Recency and monetary are quintiles (5 = best);
+      frequency is 1, 2 or 3+ orders because most customers buy once.
+    columns:
+      - name: customer_unique_id
+        data_tests: [unique, not_null]
+      - name: segment
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Champions, Loyal, Promising high-value, Recent, At risk high-value, Hibernating]
