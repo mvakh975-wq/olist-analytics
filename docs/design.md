@@ -1,6 +1,6 @@
 # Olist Analytics — проектный документ
 
-Дата: 2026-10-13 · Статус: на согласовании
+Дата: 2026-10-13 · Статус: согласован; §5 обновлён 2026-10-13
 
 ## 1. Цель
 
@@ -48,7 +48,8 @@ Kaggle (9 CSV) ─► scripts/download.py ─► data/raw/            (не в g
    ─► dbt-duckdb: staging ─► intermediate ─► marts  → olist.duckdb (не в git)
    ─► scripts/export_marts.py ─► data/marts/*.parquet         (в git)
    ─► notebooks/ (анализ, статистика)
-   ─► site/ (Evidence.dev, читает parquet) ─► GitHub Pages
+   ─► scripts/export_marts.py site-data ─► site/src/data/*.parquet (агрегаты для страниц)
+   ─► site/ (Observable Framework: SQL-блоки на DuckDB в браузере + Observable Plot) ─► GitHub Pages
 ```
 
 Витрины в git позволяют CI собрать сайт без доступа к Kaggle.
@@ -86,7 +87,12 @@ Kaggle (9 CSV) ─► scripts/download.py ─► data/raw/            (не в g
 DuckDB. Статистика: scipy (тесты, бутстрап-интервалы). Выводы ноутбуков переносятся в текст
 дашборда; числа в тексте дашборда подставляются запросами к витринам, а не вписываются руками.
 
-## 5. Дашборд (Evidence.dev)
+## 5. Дашборд (Observable Framework)
+
+Изначально планировался Evidence.dev; к октябрю 2026 его разработка перешла в облачный
+Evidence Studio, а открытая версия перестала развиваться. Выбран Observable Framework:
+статическая сборка, SQL-блоки (DuckDB-WASM) прямо на страницах, графики Observable Plot.
+Страницы читают небольшие агрегаты, подготовленные из витрин, а не сами витрины.
 
 Страницы: **Overview** (выводы + KPI со сравнением к прошлому периоду), **Growth** (фильтры:
 период, штат, категория), **Retention** (тепловая карта когорт, кривые удержания),
@@ -104,7 +110,7 @@ olist-analytics/
   scripts/            download.py, export_marts.py
   dbt/                dbt_project.yml, profiles.yml, models/{staging,intermediate,marts}, tests/
   notebooks/          00_data_profiling … 04_delivery_vs_reviews
-  site/               Evidence: pages/*.md, sources/
+  site/               Observable Framework: src/*.md, src/data/ (генерируется)
   data/marts/         *.parquet (в git)
   docs/               design.md, data_quality.md, images/
   tests/              pytest
@@ -116,7 +122,7 @@ olist-analytics/
 
 - Python 3.12 через uv (3.14 не используем, пока его не поддерживает dbt — проверить).
 - dbt-core + dbt-duckdb, DuckDB, pandas, scipy, Jupyter.
-- Evidence.dev (Node.js LTS) для сайта.
+- Observable Framework (Node.js) для сайта.
 - Стиль: ruff (Python), sqlfluff (SQL, диалект duckdb + шаблонизатор dbt).
 - Версии зависимостей фиксируются (uv.lock, package-lock.json).
 
@@ -128,7 +134,7 @@ olist-analytics/
     указанием лицензии). Полный `dbt build` — локально перед экспортом витрин.
 - **pytest:** download.py (без сети, ошибки и распаковка), export_marts.py, сверочные тесты:
   GMV и число заказов в витринах совпадают с прямым расчётом по staging.
-- **Сайт:** сборка Evidence в CI; локально — Playwright: все страницы на десктопе и телефоне,
+- **Сайт:** сборка Observable Framework в CI; локально — Playwright: все страницы на десктопе и телефоне,
   светлая и тёмная тема (если Evidence поддерживает), нет ошибок в консоли; скриншоты в README.
 - **Деплой:** `pages.yml` собирает сайт из закоммиченных витрин и публикует на GitHub Pages.
 
@@ -144,6 +150,6 @@ olist-analytics/
 | Риск | Что делаем |
 |------|-----------|
 | Повторных покупок очень мало → когорты и RFM малоинформативны | Это сам по себе вывод; адаптируем RFM, фокус на первой покупке и опыте доставки |
-| Evidence не умеет нужный график или тёмную тему | Проверяем на прототипе страницы в начале; запасной вариант — кастомный ECharts-компонент в Evidence |
+| Инструмент дашборда меняет модель (так случилось с Evidence) | Перешли на Observable Framework; сайт собирается из закоммиченных агрегатов, зависимость зафиксирована в package-lock |
 | dbt не поддерживает выбранную версию Python | Фиксируем 3.12 через uv |
 | Нет токена Kaggle | Ручная загрузка архива, инструкция в README |
