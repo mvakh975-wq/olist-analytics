@@ -19,7 +19,8 @@ jobs:
       - name: dbt build on the fixture sample
         env:
           OLIST_DB: ci.duckdb
-        run: uv run dbt build --project-dir dbt --profiles-dir dbt --vars "{raw_dir: tests/fixtures/raw}"
+        run: |
+          uv run dbt build --project-dir dbt --profiles-dir dbt --vars "{raw_dir: tests/fixtures/raw}"
       - name: Tests
         run: uv run pytest
 
