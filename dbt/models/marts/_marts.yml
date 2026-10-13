@@ -41,3 +41,11 @@ models:
     columns:
       - name: product_id
         data_tests: [unique, not_null]
+
+  - name: mart_monthly_kpis
+    description: >
+      Business KPIs per purchase month (valid orders): orders, customers, new customers, GMV,
+      average order value, freight share of GMV, late-delivery rate (delivered orders) and mean review score.
+    columns:
+      - name: month
+        data_tests: [unique, not_null]
