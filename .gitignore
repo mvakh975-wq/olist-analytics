@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+data/raw/
+*.duckdb
+*.duckdb.wal
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+logs/
+.ipynb_checkpoints/
+site/node_modules/
+site/.evidence/
+site/build/
+site/sources/olist/*.duckdb
+.DS_Store
