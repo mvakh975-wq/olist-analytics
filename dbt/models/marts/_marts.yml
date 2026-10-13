@@ -1,0 +1,43 @@
+version: 2
+
+# Metric definitions used across the project:
+#   gmv            items price + freight, BRL (payments are not used for revenue)
+#   valid order    status not canceled/unavailable and at least one item
+#   delay_days     delivered date - estimated date, days; NULL unless delivered with a date
+#   is_late        delay_days > 0
+#   analysis period  purchase months from var analysis_start to analysis_end
+
+models:
+  - name: fct_orders
+    description: One row per order (all statuses) with value, delivery timing, review and the analysis-period flag.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: gmv
+        description: Items price + freight, BRL.
+      - name: is_analysis_period
+        description: Purchase month within the analysis period (full months with a steady order volume).
+        data_tests: [not_null]
+
+  - name: fct_order_items
+    description: One row per order item with category, states and order flags.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [order_id, order_item_id]}
+
+  - name: dim_customers
+    description: One row per person (customer_unique_id) with first/last order and lifetime value, valid orders only.
+    columns:
+      - name: customer_unique_id
+        data_tests: [unique, not_null]
+
+  - name: dim_sellers
+    description: Sellers with order volume, late-delivery rate and mean review score of the orders they led.
+    columns:
+      - name: seller_id
+        data_tests: [unique, not_null]
+
+  - name: dim_products
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
