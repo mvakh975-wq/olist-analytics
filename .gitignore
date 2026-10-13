@@ -13,3 +13,10 @@ site/dist/
 site/src/.observablehq/cache/
 site/src/data/
 .DS_Store
+
+# credentials must never be committed, even by accident
+.env
+.env.*
+kaggle.json
+access_token
+.kaggle/
