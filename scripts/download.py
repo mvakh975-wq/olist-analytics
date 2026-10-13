@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 DATASET = "olistbr/brazilian-ecommerce"
@@ -22,12 +24,25 @@ RAW_FILES = (
 )
 
 
+# written only after a download finished and every file was checked
+COMPLETE_MARKER = ".download-complete"
+
+
 class RawDataError(Exception):
     pass
 
 
 def missing_files(raw_dir: Path) -> list[str]:
-    return [name for name in RAW_FILES if not (raw_dir / name).is_file()]
+    """Expected files that are absent or empty."""
+    return [
+        name
+        for name in RAW_FILES
+        if not (raw_dir / name).is_file() or (raw_dir / name).stat().st_size == 0
+    ]
+
+
+def is_complete(raw_dir: Path) -> bool:
+    return (raw_dir / COMPLETE_MARKER).is_file() and not missing_files(raw_dir)
 
 
 def _default_api():
@@ -38,7 +53,7 @@ def _default_api():
 
 
 def download(raw_dir: Path, api=None) -> None:
-    if not missing_files(raw_dir):
+    if is_complete(raw_dir):
         return
     raw_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -53,10 +68,18 @@ def download(raw_dir: Path, api=None) -> None:
             f"  {DATASET_URL}\n"
             f"and unzip all CSV files into {raw_dir}"
         ) from exc
-    api.dataset_download_files(DATASET, path=str(raw_dir), unzip=True)
-    missing = missing_files(raw_dir)
-    if missing:
-        raise RawDataError(f"Download incomplete, missing: {', '.join(missing)}")
+    # download into a scratch directory so an interrupted run never leaves half a dataset behind
+    with tempfile.TemporaryDirectory(dir=raw_dir) as scratch:
+        try:
+            api.dataset_download_files(DATASET, path=scratch, unzip=True)
+        except (Exception, SystemExit) as exc:
+            raise RawDataError(f"Download from Kaggle failed: {exc}") from exc
+        missing = missing_files(Path(scratch))
+        if missing:
+            raise RawDataError(f"Download incomplete, missing: {', '.join(missing)}")
+        for name in RAW_FILES:
+            os.replace(Path(scratch) / name, raw_dir / name)
+    (raw_dir / COMPLETE_MARKER).write_text("ok\n")
 
 
 def main(argv: list[str] | None = None) -> int:

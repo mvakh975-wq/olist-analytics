@@ -25,6 +25,7 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: site/package-lock.json
+      - uses: actions/configure-pages@v5
       - run: uv sync --locked && make site-data
       - name: Build the dashboard
         working-directory: site

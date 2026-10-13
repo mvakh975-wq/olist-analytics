@@ -205,10 +205,10 @@ db.sql("""
 #   rank-biserial −0.64, a large effect). 15+ days late: −2.57.
 # - **Four or more days late flips the review**: the share of 1–2 star reviews goes from 9% (on time)
 #   to 32% (1–3 days late) and 68% (4–7 days late).
-# - **The gap holds inside every state** (−1.6 to −2.6 stars across 21 states) and inside the five
+# - **The gap holds inside each of the 21 states with enough late orders** (−1.6 to −2.6 stars) and inside the five
 #   largest categories (−1.9 to −2.2), so it is not explained by where or what people buy.
 #   It is still an observational association.
 # - **Where it fails**: late rates spiked in the Black Friday month (12.4% in Nov 2017) and again in
-#   Feb–Mar 2018 (14.1% and 19.0%), against about 3% in calm months of 2017; by state, from 4.5% in SP to 12.1%
-#   in RJ and 17.5% in MA;
+#   Feb–Mar 2018 (14.1% and 19.0%), against about 3% in calm months of 2017; by state, 4.5% in SP (the largest
+#   market) against 12.1% in RJ and 17.5% in MA;
 #   the worst 10% of sellers with 50+ orders (42 sellers) are late on 15.4% of orders vs 6.2% for the rest.

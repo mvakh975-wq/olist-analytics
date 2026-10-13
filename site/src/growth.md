@@ -27,13 +27,16 @@ const category = view(Inputs.select(["All categories", ...[...category_options].
 ```
 
 ```sql id=monthly
-select month, sum(gmv) as gmv
-from gmv
-where is_analysis_period
-  and (${state} = 'All states' or customer_state = ${state})
-  and (${category} = 'All categories' or category = ${category})
-group by month
-order by month
+-- every month of the period, so months without sales show as 0 instead of being skipped
+with months as (select month from kpis where is_analysis_period)
+select m.month, coalesce(sum(g.gmv), 0) as gmv
+from months as m
+left join gmv as g
+  on g.month = m.month
+  and (${state} = 'All states' or g.customer_state = ${state})
+  and (${category} = 'All categories' or g.category = ${category})
+group by m.month
+order by m.month
 ```
 
 ```sql id=yoy

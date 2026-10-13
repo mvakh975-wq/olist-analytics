@@ -40,13 +40,15 @@ more costs most of the goodwill of the order; a more conservative estimate in hi
 cheaper than a 1-star review.
 → [`04_delivery_vs_reviews`](../notebooks/04_delivery_vs_reviews.ipynb)
 
-## 4. Delays concentrate in time, place and a few sellers
+## 4. Delays concentrate in time and place
 
 - **Time:** 12.4% of orders were late in November 2017 (Black Friday) and 14.1% / 19.0% in February /
   March 2018, against about 3% in calm months of 2017.
-- **Place:** from 4.5% in São Paulo to 12.1% in Rio de Janeiro and 17.5% in Maranhão.
+- **Place:** 4.5% in São Paulo, the largest market, against 12.1% in Rio de Janeiro and 17.5% in
+  Maranhão (states with 500+ delivered orders range from 4.1% in Paraná to 17.5%).
 - **Sellers:** the worst 10% of sellers with 50+ orders (42 sellers) are late on 15.4% of their orders,
-  against 6.2% for the rest.
+  against 6.2% for the rest. They are a clear target for improvement, though they account for only
+  about a tenth of all late deliveries; most delays are spread across the network.
 
 **Recommendation:** plan carrier capacity ahead of sales peaks; widen delivery estimates for the
 North-East and Rio de Janeiro; put the slowest sellers on a delivery-time improvement plan and track

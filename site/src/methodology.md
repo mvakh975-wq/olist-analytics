@@ -13,7 +13,7 @@ title: Methodology
 ## Pipeline
 
 1. Raw CSV files are loaded into DuckDB by **dbt**, in three layers: *staging* (types, names, translations), *intermediate* (one row per order) and *marts* (facts, dimensions and one table per business question).
-2. **52 dbt tests** check keys, relationships, accepted values and business rules on every build. In CI they run on a sample of real rows chosen to contain every edge case found during profiling.
+2. **53 dbt tests** check keys, relationships, accepted values and business rules on every build. In CI they run on a sample of real rows chosen to contain every edge case found during profiling.
 3. Python notebooks do the statistics (bootstrap confidence intervals, Mann–Whitney U, checks inside states and categories).
 4. This site is built with **Observable Framework**; every number in its charts and findings comes from a SQL query over aggregates of the marts, run in the browser with DuckDB.
 

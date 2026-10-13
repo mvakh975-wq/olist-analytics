@@ -19,7 +19,7 @@ import {integer, pct, millionsBRL, brl, signed, stars, asDate} from "./component
 
 # Olist marketplace: growth, retention and delivery
 
-<p class="lede">An analysis of ~96,000 orders on Olist, a Brazilian e-commerce marketplace, from January 2017 to August 2018: how the business grew, whether customers come back, and how delivery affects satisfaction.</p>
+<p class="lede">An analysis of ~98,000 orders on Olist, a Brazilian e-commerce marketplace, from January 2017 to August 2018: how the business grew, whether customers come back, and how delivery affects satisfaction.</p>
 
 ```sql id=yoy
 select
@@ -147,13 +147,13 @@ GMV in January–August 2018 was **${millionsBRL(y.gmv_2018)}, ${(y.gmv_2018 / y
 
 ### 3. Late delivery goes with far worse reviews
 
-On-time orders average **${stars(e.mean_on_time)} stars, late orders ${stars(e.mean_late)}** (difference ${signed(e.diff)}, 95% CI ${signed(e.ci_low)} to ${signed(e.ci_high)}). The share of 1–2 star reviews rises from ${pct(lo.on_time, 0)} on time to ${pct(lo.late_4_7, 0)} at 4–7 days late. The gap holds inside every state (${signed(d3.max(stateDiffs), 1)} to ${signed(d3.min(stateDiffs), 1)} stars), so it is not explained by geography; the data is observational.
+On-time orders average **${stars(e.mean_on_time)} stars, late orders ${stars(e.mean_late)}** (difference ${signed(e.diff)}, 95% CI ${signed(e.ci_low)} to ${signed(e.ci_high)}). The share of 1–2 star reviews rises from ${pct(lo.on_time, 0)} on time to ${pct(lo.late_4_7, 0)} at 4–7 days late. The gap holds inside each of the ${stateDiffs.length} states with enough late orders to test (${signed(d3.max(stateDiffs), 1)} to ${signed(d3.min(stateDiffs), 1)} stars), so it is not explained by geography; the data is observational.
 
 <p class="recommendation">Treat the promised delivery date as part of the product: a more conservative estimate on risky routes is cheaper than a 1-star review.</p>
 
-### 4. Delays concentrate in time, place and a few sellers
+### 4. Delays concentrate in time and place
 
-Late deliveries reached ${pct(sp.nov_2017)} in November 2017 and ${pct(sp.mar_2018)} in March 2018. By state they range from ${pct(s.sp)} in São Paulo to ${pct(s.rj)} in Rio de Janeiro and ${pct(s.ma)} in Maranhão. The worst 10% of sellers with 50+ orders (${w.n_worst} sellers) are late on ${pct(w.worst)} of orders, against ${pct(w.rest)} for the rest.
+Late deliveries reached ${pct(sp.nov_2017)} in November 2017 and ${pct(sp.mar_2018)} in March 2018. São Paulo, the largest market, sees ${pct(s.sp)} late, against ${pct(s.rj)} in Rio de Janeiro and ${pct(s.ma)} in Maranhão. The worst 10% of sellers with 50+ orders (${w.n_worst} sellers) are late on ${pct(w.worst)} of orders, against ${pct(w.rest)} for the rest.
 
 <p class="recommendation">Plan carrier capacity before sales peaks, widen estimates for the North-East and Rio, and put the slowest sellers on a delivery-time plan.</p>
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.download import RAW_FILES, RawDataError, download, missing_files
+from scripts.download import COMPLETE_MARKER, RAW_FILES, RawDataError, download, missing_files
 
 
 def touch_all(d: Path, names) -> None:
@@ -24,6 +24,7 @@ def test_incomplete_raw_dir_detected(tmp_path):
 
 def test_complete_dir_skips_download(tmp_path):
     touch_all(tmp_path, RAW_FILES)
+    (tmp_path / COMPLETE_MARKER).write_text("ok\n")
 
     class Boom:
         def authenticate(self):
@@ -74,3 +75,29 @@ def test_client_exit_on_missing_credentials_becomes_raw_data_error(tmp_path):
 
     with pytest.raises(RawDataError, match="kaggle auth login"):
         download(tmp_path, api=ExitingClient())
+
+
+def test_files_from_an_interrupted_download_are_not_trusted(tmp_path):
+    # all names present (e.g. unzip was interrupted) but the download never completed
+    touch_all(tmp_path, RAW_FILES)
+    (tmp_path / "olist_orders_dataset.csv").write_text("")
+    calls = []
+
+    class Api(FakeApi):
+        def dataset_download_files(self, dataset, path, unzip):
+            calls.append(path)
+            super().dataset_download_files(dataset, path, unzip)
+
+    download(tmp_path, api=Api(RAW_FILES))
+    assert calls, "an incomplete directory must trigger a fresh download"
+    assert missing_files(tmp_path) == []
+
+
+def test_download_failure_becomes_raw_data_error(tmp_path):
+    class Offline(FakeApi):
+        def dataset_download_files(self, dataset, path, unzip):
+            raise ConnectionError("network is unreachable")
+
+    with pytest.raises(RawDataError, match="network is unreachable"):
+        download(tmp_path, api=Offline(RAW_FILES))
+    assert missing_files(tmp_path) == list(RAW_FILES)

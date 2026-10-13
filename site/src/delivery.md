@@ -39,15 +39,19 @@ order by 2
 ```
 
 ```js
-const bucketOrder = [...by_bucket].map((d) => d.delay_bucket);
+// fixed order so an empty bucket stays visible as a gap instead of disappearing
+const bucketOrder = ["On time or early", "1–3 days late", "4–7 days late", "8–14 days late", "15+ days late"];
 const onTime = by_bucket.get(0);
 const late4 = [...by_bucket].filter((d) => d.delay_bucket_order >= 3);
-const late4Low = d3.sum(late4, (d) => d.low_score_orders) / d3.sum(late4, (d) => d.reviewed);
+const late4Reviewed = d3.sum(late4, (d) => d.reviewed);
+const late4Low = d3.sum(late4, (d) => d.low_score_orders) / late4Reviewed;
+// below this many reviewed late orders a headline percentage would be noise
+const enoughLate = late4Reviewed >= 30;
 ```
 
 <div class="grid grid-cols-2">
   <div class="card">
-    <h2>${pct(late4Low, 0)} of orders delivered 4+ days late get a 1–2 star review, against ${pct(onTime.low_score_share, 0)} on time</h2>
+    <h2>${enoughLate ? `${pct(late4Low, 0)} of orders delivered 4+ days late get a 1–2 star review, against ${pct(onTime.low_score_share, 0)} on time` : `1–2 star reviews by delivery delay (only ${late4Reviewed} reviewed ${late4Reviewed === 1 ? "order" : "orders"} 4+ days late here)`}</h2>
     <h3>${state} · by delivery date vs the promised date</h3>
     ${resize((width) => Plot.plot({
       width,
@@ -62,7 +66,7 @@ const late4Low = d3.sum(late4, (d) => d.low_score_orders) / d3.sum(late4, (d) =>
     }))}
   </div>
   <div class="card">
-    <h2>Mean review score falls from ${stars(onTime.mean_score)} on time to as low as ${stars(d3.min(late4, (d) => d.mean_score))} for orders 4+ days late</h2>
+    <h2>${enoughLate ? `Mean review score falls from ${stars(onTime.mean_score)} on time to as low as ${stars(d3.min(late4, (d) => d.mean_score))} for orders 4+ days late` : "Mean review score by delivery delay"}</h2>
     <h3>${state} · by delivery date vs the promised date</h3>
     ${resize((width) => Plot.plot({
       width,
@@ -120,7 +124,7 @@ const diffs = [...state_diffs];
 ```
 
 <div class="card">
-  <h2>The gap holds inside every state: late orders score ${(-d3.max(diffs, (d) => d.diff)).toFixed(1)} to ${(-d3.min(diffs, (d) => d.diff)).toFixed(1)} stars lower</h2>
+  <h2>The gap holds inside each of the ${diffs.length} states tested: late orders score ${(-d3.max(diffs, (d) => d.diff)).toFixed(1)} to ${(-d3.min(diffs, (d) => d.diff)).toFixed(1)} stars lower</h2>
   <h3>Mean score of late minus on-time orders, states with 300+ reviewed deliveries and 30+ late ones</h3>
   ${resize((width) => Plot.plot({
     width,

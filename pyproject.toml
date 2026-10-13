@@ -1,7 +1,7 @@
 [project]
 name = "olist-analytics"
 version = "0.1.0"
-description = "E-commerce analytics on the Olist dataset: dbt + DuckDB models, statistical analysis, Evidence dashboard."
+description = "E-commerce analytics on the Olist dataset: dbt + DuckDB models, statistical analysis, Observable Framework dashboard."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "dbt-core>=1.9",
