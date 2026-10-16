@@ -2,7 +2,14 @@ import json
 
 import duckdb
 
-from scripts.export_marts import EXPORT_TABLES, SITE_TABLES, build_site_data, export
+from scripts.export_marts import (
+    DATALENS_CSV,
+    EXPORT_TABLES,
+    SITE_TABLES,
+    build_datalens,
+    build_site_data,
+    export,
+)
 from tests.conftest import query
 
 
@@ -177,3 +184,48 @@ def test_growth_page_files_are_small_csvs_that_reconcile(built_db, tmp_path):
         built_db, "select count(*) from mart_monthly_kpis where is_analysis_period"
     )
     assert len(kpis.fetchall()) == months
+
+
+def datalens(built_db, tmp_path):
+    marts = tmp_path / "marts"
+    export(built_db, marts)
+    return {p.stem: p for p in build_datalens(marts, tmp_path / "datalens")}
+
+
+def test_datalens_files_have_no_ids(built_db, tmp_path):
+    files = datalens(built_db, tmp_path)
+    assert sorted(files) == sorted(DATALENS_CSV)
+    for path in files.values():
+        header = path.read_text().splitlines()[0].lower()
+        assert "_id" not in header and " id" not in header, path.name
+
+
+def test_datalens_orders_match_monthly_kpis(built_db, tmp_path):
+    orders = datalens(built_db, tmp_path)["orders"]
+    ((n, gmv, late_rate),) = duckdb.sql(
+        f"""select count(*), sum("GMV, BRL"), avg("Опоздал") from '{orders}'"""
+    ).fetchall()
+    ((kpi_orders, kpi_gmv),) = query(
+        built_db,
+        "select sum(orders), sum(gmv) from mart_monthly_kpis where is_analysis_period",
+    )
+    ((delivered_late_rate,),) = query(
+        built_db,
+        "select avg(is_late::int) from mart_delivery_performance where is_analysis_period",
+    )
+    assert n == kpi_orders
+    assert round(gmv, 2) == round(float(kpi_gmv), 2)
+    assert late_rate == delivered_late_rate
+
+
+def test_datalens_labels_every_segment_and_delay_bucket(built_db, tmp_path):
+    files = datalens(built_db, tmp_path)
+    ((unlabelled_buckets,),) = duckdb.sql(
+        f"""select count(*) from '{files["orders"]}'
+            where "Доставлен" = 1 and "Срок доставки" is null"""
+    ).fetchall()
+    ((unlabelled_segments,),) = duckdb.sql(
+        f"""select count(*) from '{files["rfm"]}' where "Сегмент" is null"""
+    ).fetchall()
+    assert unlabelled_buckets == 0
+    assert unlabelled_segments == 0

@@ -46,7 +46,7 @@ Kaggle (9 CSV) ─► scripts/download.py ─► data/raw/                      
 
 - **SQL models** ([`dbt/models`](dbt/models)): typed staging views, one enriched row per order, and marts per question: `fct_orders`, `dim_customers`, `mart_monthly_kpis`, `mart_cohort_retention`, `mart_rfm`, `mart_delivery_performance` and others.
 - **Data quality** ([`docs/data_quality.md`](docs/data_quality.md)): every table profiled for nulls, duplicates and types before modelling, with a decision for each issue. dbt tests guard keys, relationships, accepted values and business rules (for example, no delay is ever computed for an order that was not delivered).
-- **Tests** (pytest, 65): the dbt project is built on a sample of real rows chosen to contain every edge case found in profiling, and the marts are reconciled against totals computed straight from the raw files. CI runs lint (ruff, sqlfluff), dbt build, pytest and a dashboard build on every push.
+- **Tests** (pytest, 68): the dbt project is built on a sample of real rows chosen to contain every edge case found in profiling, and the marts are reconciled against totals computed straight from the raw files. CI runs lint (ruff, sqlfluff), dbt build, pytest and a dashboard build on every push.
 - **Dashboard checks**: a Playwright script opens every page at desktop and phone widths in light and dark mode and fails on errors or horizontal scroll.
 
 ### Three things the data tried to hide

@@ -1,6 +1,6 @@
 """Export dbt marts to parquet (committed) and build the small aggregates the dashboard reads.
 
-Usage: python -m scripts.export_marts export|site-data
+Usage: python -m scripts.export_marts export|site-data|datalens
 """
 
 from __future__ import annotations
@@ -181,6 +181,59 @@ GROWTH_CSV = {
         where is_analysis_period""",
 }
 
+# Flat CSV files for the Yandex DataLens dashboard: Russian headers, no customer or order ids.
+# Flags are 0/1 so that AVG gives a rate; measures are left unaggregated where DataLens can
+# aggregate them itself.
+DATALENS_CSV = {
+    "orders": """
+        select o.purchased_at::date as "Дата покупки",
+               o.purchase_month as "Месяц",
+               o.customer_state as "Штат",
+               o.main_category as "Категория",
+               o.n_items as "Товаров в заказе",
+               o.items_value::double as "Товары, BRL",
+               o.freight_value::double as "Доставка, BRL",
+               o.gmv::double as "GMV, BRL",
+               (d.order_id is not null)::int as "Доставлен",
+               d.is_late::int as "Опоздал",
+               d.delivery_days as "Дней доставки",
+               case when d.is_late then d.delay_days end as "Дней опоздания",
+               case d.delay_bucket_order
+                   when 1 then 'Вовремя или раньше'
+                   when 2 then '1–3 дня'
+                   when 3 then '4–7 дней'
+                   when 4 then '8–14 дней'
+                   when 5 then '15+ дней'
+               end as "Срок доставки",
+               d.delay_bucket_order as "Порядок срока",
+               o.review_score as "Оценка"
+        from '{m}/fct_orders.parquet' as o
+        left join '{m}/mart_delivery_performance.parquet' as d using (order_id)
+        where o.is_valid_order and o.is_analysis_period""",
+    "cohorts": """
+        select cohort_month as "Когорта",
+               months_since_first as "Месяц жизни",
+               cohort_size as "Размер когорты",
+               active_customers as "Активные покупатели"
+        from '{m}/mart_cohort_retention.parquet'
+        where is_analysis_period""",
+    "rfm": """
+        select case segment
+                   when 'Champions' then 'Чемпионы'
+                   when 'Loyal' then 'Лояльные'
+                   when 'Recent' then 'Недавние'
+                   when 'Promising high-value' then 'Перспективные с высоким чеком'
+                   when 'At risk high-value' then 'Под угрозой, высокий чек'
+                   when 'Hibernating' then 'Спящие'
+               end as "Сегмент",
+               customer_state as "Штат",
+               count(*) as "Покупатели",
+               sum(monetary)::double as "Выручка, BRL"
+        from '{m}/mart_rfm.parquet'
+        group by all""",
+}
+DATALENS_DIR = Path("data/datalens")
+
 EFFECT = """
 select mean_on_time, mean_late, diff, ci_low, ci_high
 from '{m}/stats_delay_effect.parquet' where comparison = 'late vs on time'
@@ -220,6 +273,17 @@ def build_site_data(marts_dir: Path, out_dir: Path, min_seller_orders: int = 50)
     (out_dir / "overview.json").write_text(json.dumps(overview, indent=2) + "\n")
 
 
+def build_datalens(marts_dir: Path, out_dir: Path) -> list[Path]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    con = duckdb.connect()
+    paths = []
+    for name, sql in DATALENS_CSV.items():
+        path = out_dir / f"{name}.csv"
+        con.execute(f"copy ({sql.format(m=marts_dir)} order by all) to '{path}' (header)")
+        paths.append(path)
+    return paths
+
+
 def main(argv: list[str]) -> int:
     if argv == ["export"]:
         for path in export(DB, MARTS_DIR):
@@ -227,8 +291,11 @@ def main(argv: list[str]) -> int:
     elif argv == ["site-data"]:
         build_site_data(MARTS_DIR, SITE_DATA_DIR)
         print(SITE_DATA_DIR)
+    elif argv == ["datalens"]:
+        for path in build_datalens(MARTS_DIR, DATALENS_DIR):
+            print(path)
     else:
-        print("usage: python -m scripts.export_marts export|site-data", file=sys.stderr)
+        print("usage: python -m scripts.export_marts export|site-data|datalens", file=sys.stderr)
         return 2
     return 0
 

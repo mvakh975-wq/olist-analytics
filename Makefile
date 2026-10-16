@@ -1,7 +1,7 @@
 DBT = uv run dbt --no-use-colors
 DBT_ARGS = --project-dir dbt --profiles-dir dbt
 
-.PHONY: data build export site-data site test lint
+.PHONY: data build export site-data datalens site test lint
 
 data:            ## download raw CSVs from Kaggle into data/raw
 	uv run python -m scripts.download
@@ -14,6 +14,9 @@ export:          ## export marts to data/marts/*.parquet
 
 site-data:       ## build the dashboard's aggregates from the committed parquet marts
 	uv run python -m scripts.export_marts site-data
+
+datalens:        ## build flat CSV files for the Yandex DataLens dashboard
+	uv run python -m scripts.export_marts datalens
 
 site: site-data  ## run the dashboard locally
 	cd site && npm install && npm run dev

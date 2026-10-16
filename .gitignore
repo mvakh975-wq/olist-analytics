@@ -12,6 +12,7 @@ site/node_modules/
 site/dist/
 site/src/.observablehq/cache/
 site/src/data/
+data/datalens/
 .DS_Store
 
 # credentials must never be committed, even by accident
