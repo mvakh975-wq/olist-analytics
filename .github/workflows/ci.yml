@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0  # no floating major tag is published
+      - run: uv sync --locked
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run sqlfluff lint dbt/models dbt/tests
+      - name: dbt build on the fixture sample
+        env:
+          OLIST_DB: ci.duckdb
+        run: |
+          uv run dbt build --project-dir dbt --profiles-dir dbt --vars "{raw_dir: tests/fixtures/raw}"
+      - name: Tests
+        run: uv run pytest
+
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0  # no floating major tag is published
+        with:
+          save-cache: false  # the CI test job saves the shared uv cache
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: uv sync --locked && make site-data
+      - name: Build the dashboard
+        working-directory: site
+        run: npm ci && npm run build

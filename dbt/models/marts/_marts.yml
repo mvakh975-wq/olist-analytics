@@ -1,0 +1,83 @@
+version: 2
+
+# Metric definitions used across the project:
+#   gmv            items price + freight, BRL (payments are not used for revenue)
+#   valid order    status not canceled/unavailable and at least one item
+#   delay_days     delivered date - estimated date, days; NULL unless delivered with a date
+#   is_late        delay_days > 0
+#   analysis period  purchase months from var analysis_start to analysis_end
+
+models:
+  - name: fct_orders
+    description: One row per order (all statuses) with value, delivery timing, review and the analysis-period flag.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: gmv
+        description: Items price + freight, BRL.
+      - name: is_analysis_period
+        description: Purchase month within the analysis period (full months with a steady order volume).
+        data_tests: [not_null]
+
+  - name: fct_order_items
+    description: One row per order item with category, states and order flags.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [order_id, order_item_id]}
+
+  - name: dim_customers
+    description: One row per person (customer_unique_id) with first/last order and lifetime value, valid orders only.
+    columns:
+      - name: customer_unique_id
+        data_tests: [unique, not_null]
+
+  - name: dim_sellers
+    description: Sellers with order volume, late-delivery rate and mean review score of the orders they led.
+    columns:
+      - name: seller_id
+        data_tests: [unique, not_null]
+
+  - name: dim_products
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+
+  - name: mart_monthly_kpis
+    description: >
+      Business KPIs per purchase month (valid orders): orders, customers, new customers, GMV,
+      average order value, freight share of GMV, late-delivery rate (delivered orders) and mean review score.
+    columns:
+      - name: month
+        data_tests: [unique, not_null]
+
+  - name: mart_cohort_retention
+    description: >
+      Share of each first-purchase cohort (customer_unique_id) that placed a valid order N months later.
+      Only offsets that fall within the analysis period are present.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [cohort_month, months_since_first]}
+
+  - name: mart_rfm
+    description: >
+      RFM segmentation per person. Recency and monetary are quintiles (5 = best);
+      frequency is 1, 2 or 3+ orders because most customers buy once.
+    columns:
+      - name: customer_unique_id
+        data_tests: [unique, not_null]
+      - name: segment
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Champions, Loyal, Promising high-value, Recent, At risk high-value, Hibernating]
+
+  - name: mart_delivery_performance
+    description: >
+      Delivered orders with a measurable delay (delivered date - estimated date), bucketed,
+      with the review score (NULL when there is no review) and a 1–2 star flag.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: delay_bucket
+        data_tests: [not_null]

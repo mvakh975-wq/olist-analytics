@@ -1,0 +1,23 @@
+name: olist
+version: "1.0.0"
+config-version: 2
+profile: olist
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+vars:
+  raw_dir: data/raw
+  # first and last full months with a steady order volume, see docs/data_quality.md
+  analysis_start: "2017-01-01"
+  analysis_end: "2018-08-31"
+
+models:
+  olist:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: table
+    marts:
+      +materialized: table
