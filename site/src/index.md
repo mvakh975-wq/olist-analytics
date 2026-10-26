@@ -42,7 +42,7 @@ const change = (now, before) => `${signed((now / before - 1) * 100, 0)}%`;
 
 <div class="finding">
 
-### 1. Growth came from new orders, and it stalled in 2018
+### 1. Growth came from new customers, and it stalled in 2018
 
 GMV in January–August 2018 was **${millionsBRL(o.gmv_2018)}, ${(o.gmv_2018 / o.gmv_2017).toFixed(1)}× the same months of 2017**, with orders up ${change(o.orders_2018, o.orders_2017)} while the average order value barely moved (${brl(o.aov_2017)} → ${brl(o.aov_2018)}). Since January 2018, no month has beaten the Black Friday month of November 2017 (${millionsBRL(o.black_friday_gmv)}).
 

@@ -21,3 +21,6 @@ data/datalens/
 kaggle.json
 access_token
 .kaggle/
+
+# dbt anonymous usage id
+dbt/.user.yml

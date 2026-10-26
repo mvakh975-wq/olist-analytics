@@ -1,0 +1,2 @@
+# Notebooks are reports built on the Python code; count the code in the repository languages
+*.ipynb linguist-detectable=false

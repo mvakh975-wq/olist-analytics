@@ -1,5 +1,7 @@
 # Olist e-commerce analytics
 
+[Русская версия](README.ru.md)
+
 [![CI](https://github.com/mvakh975-wq/olist-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/mvakh975-wq/olist-analytics/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
 ![dbt + DuckDB](https://img.shields.io/badge/dbt-DuckDB-orange)
@@ -10,8 +12,6 @@
 
 **[→ Open the dashboard](https://mvakh975-wq.github.io/olist-analytics/)**
 
-[Русская версия](README.ru.md)
-
 ![Dashboard overview: KPIs and key findings](docs/images/overview.png)
 
 ## Key findings
@@ -21,7 +21,7 @@ Analysis period January 2017 – August 2018, valid orders only. Full write-up w
 1. **Growth came from new customers, and it stalled in 2018.** GMV in Jan–Aug 2018 was 8.59 M BRL, 2.4× the same months of 2017, while the average order value stayed flat at ~160 BRL. No month in 2018 beat the Black Friday month of November 2017.
 2. **Almost nobody buys twice.** 97% of customers placed exactly one order; only 0.48% of a cohort orders again the following month. Two high-value one-time-buyer segments are 38% of customers and 68% of revenue, the natural target for a second-purchase programme.
 3. **Late delivery goes with far worse reviews.** On-time orders average 4.29 stars, late ones 2.27 (−2.02, 95% CI −2.06 to −1.98, Mann–Whitney p < 0.001). 68% of orders delivered 4–7 days late get a 1–2 star review, against 9% on time. The gap holds inside each of the 21 states with enough late orders and inside the five largest categories.
-4. **Delays concentrate in time and place.** The late-delivery rate more than doubled year over year (3.5% → 7.7% for January–August), peaking at 12.4% in November 2017 and 19.0% in March 2018 against about 3% in calm months; São Paulo, the largest market, sees 4.5% late against 12.1% in Rio de Janeiro and 17.5% in Maranhão. The worst 10% of active sellers are late on 15.3% of their orders against 6.2% for the rest, yet they cause only 11% of all late deliveries.
+4. **Delays concentrate in time and place.** The late-delivery rate more than doubled year over year (3.5% → 7.7% for January–August), peaking at 12.4% in November 2017 and 19.0% in March 2018 against about 3% in calm months; São Paulo, the largest market, sees 4.5% late against 12.1% in Rio de Janeiro and 17.5% in Maranhão. The worst 10% of sellers with 50+ delivered orders (42 sellers) are late on 15.3% of their orders against 6.2% for the rest, yet they cause only 11% of all late deliveries.
 
 ## Business questions
 
@@ -49,7 +49,7 @@ Kaggle (9 CSV) ─► scripts/download.py ─► data/raw/                      
 - **Tests** (pytest, 68): the dbt project is built on a sample of real rows chosen to contain every edge case found in profiling, and the marts are reconciled against totals computed straight from the raw files. CI runs lint (ruff, sqlfluff), dbt build, pytest and a dashboard build on every push.
 - **Dashboard checks**: a Playwright script opens every page at desktop and phone widths in light and dark mode and fails on errors or horizontal scroll.
 
-### Three things the data tried to hide
+### Data traps
 
 - **`customer_id` is not a customer.** Olist issues a new one per order, so retention computed on it is exactly zero. The person is `customer_unique_id`.
 - **One order, several reviews.** 547 orders have more than one review and the scores differ in 202. Each order keeps the last answered one; orders without a review stay empty instead of counting as 0.
@@ -76,7 +76,7 @@ scripts/        download, CI fixture sample, export of marts and dashboard aggre
 site/           Observable Framework dashboard
 data/marts/     exported marts (parquet)
 tests/          pytest suite, CI fixture sample, Playwright check
-docs/           design, data quality, findings, screenshots
+docs/           data quality, findings, screenshots
 ```
 
 ## Data and license
