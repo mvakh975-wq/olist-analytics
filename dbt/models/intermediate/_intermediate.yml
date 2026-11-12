@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: int_orders_enriched
+    description: >
+      One row per order: customer (customer_unique_id), value (items + freight), delivery timing,
+      main seller and category (most expensive item) and the review score (last answered review).
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        data_tests: [not_null]
+      - name: is_valid_order
+        description: Not canceled or unavailable, and has at least one item.
+        data_tests: [not_null]
+      - name: delay_days
+        description: Delivered date minus estimated date, in days. NULL unless the order is delivered with a delivery date.
+      - name: review_score
+        description: Score of the last answered review; NULL when the order has no review.
+        data_tests:
+          - accepted_values:
+              arguments: {values: [1, 2, 3, 4, 5], quote: false}
